@@ -63,3 +63,15 @@ test('目录 reconcile 的越界阅读索引按 Android getOrElse 回退末章',
   assert.equal(result.bookPatch.durChapterTitle, '第二章')
   assert.equal(result.bookPatch.latestChapterTitle, '第二章')
 })
+
+test('目录 reconcile 比较 Android tag，并忽略旧 TS updateTime 快照字段', () => {
+  const previous = [chapter({ title: '第一章', chapterUrl: 'https://source.test/c1', index: 0, tag: '更新中', updateTime: '旧更新时间' })]
+  const sameTag = [chapter({ title: '第一章', chapterUrl: 'https://source.test/c1', index: 0, tag: '更新中', updateTime: '新更新时间' })]
+  const tagChanged = [chapter({ title: '第一章', chapterUrl: 'https://source.test/c1', index: 0, tag: '已完结', updateTime: '新更新时间' })]
+
+  const unchanged = reconcileTableOfContents({ chapters: sameTag, previousChapters: previous, book: { totalChapterNum: 1, durChapterIndex: 0 }, now: 123 })
+  assert.deepEqual(unchanged.changes, [])
+
+  const updated = reconcileTableOfContents({ chapters: tagChanged, previousChapters: previous, book: { totalChapterNum: 1, durChapterIndex: 0 }, now: 123 })
+  assert.deepEqual(updated.changes.map((item) => item.kind), ['updated'])
+})

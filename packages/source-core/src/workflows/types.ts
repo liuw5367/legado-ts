@@ -426,11 +426,11 @@ export interface ChapterIdentity {
   isVip?: boolean
   /** 是否已购买。 */
   isPay?: boolean
-  /** 书源提供的章节更新时间或附加标签。 */
+  /** 仅为兼容旧 TS 快照保留；Android BookChapter 没有此字段。 */
   updateTime?: string
-  /** Android BookChapter.tag 对 updateTime 的目录投影。 */
+  /** Android BookChapter.tag；目录 updateTime 规则在解析后投影到此字段。 */
   tag?: string
-  /** 当 tocCountWords 开启且 updateTime 可识别时提取的字数。 */
+  /** tocCountWords 开启且章节信息中可识别字数时提取的字数。 */
   wordCount?: string
   /** Android BookChapter.resourceUrl；音频章节的真实媒体地址。 */
   resourceUrl?: string

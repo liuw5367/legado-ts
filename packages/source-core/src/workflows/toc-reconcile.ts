@@ -140,7 +140,7 @@ function chapterFingerprint(chapter: Chapter): string {
     chapter.isVolume,
     chapter.isVip,
     chapter.isPay,
-    chapter.updateTime,
+    chapter.tag,
     chapter.wordCount,
     chapter.resourceUrl,
     chapter.start,

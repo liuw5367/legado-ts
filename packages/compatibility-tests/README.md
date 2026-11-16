@@ -94,8 +94,14 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 
 | 案例组 | 来源与比较范围 |
 | --- | --- |
-| `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态；D17 案例另外验证搜索/详情的 `updateTime` 不进入 Android `SearchBook`/`Book` 或后续 JS 阶段 |
+| `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态；D17 案例另外验证书级和章节级 `updateTime` 不会变成 Android 对象或后续 JS 阶段可见的字段 |
 | `flow.synthetic.book-info.update-time-ignored` | 固定声明式搜索/详情规则执行，验证 Android `BookList` 忽略 SearchRule 的 `updateTime`，`BookInfo` 忽略 BookInfoRule 的 `updateTime`，TS 结果与 Android `SearchBook`/`Book` 一致 |
+| `flow.synthetic.toc.update-time-*` | 按固定 Android `BookChapterList.analyzeChapterList` 顺序编排，比较 `TocRule.updateTime` 在读取 `isVolume` 后投影到 `BookChapter.tag`、`tocCountWords` 开关与卷节点行为；JVM/TS 脚本规则还检查 `isVolume` 读取前的对象字段、tag 投影后的 VIP/购买规则，以及两个状态位的延迟写回 |
+| `flow.synthetic.toc.vip-pay-rule-mutations` | 验证 VIP/购买 JavaScript 规则对同一个 `BookChapter` 的 `tag/wordCount` 修改会保留到目录结果 |
+| `flow.synthetic.toc.android-default-index-during-rules` | 验证每条目录规则执行时 Android `BookChapter.index` 仍为默认值 `0`，最终目录位置在规则处理后确定 |
+| `flow.synthetic.toc.url-fallback-before-vip-pay`、`flow.synthetic.toc.volume-url-fallback-before-vip-pay`、`flow.synthetic.toc.volume-url-prefix-resolution` | 验证 Android 形状的章节规则对象不暴露 TS 专有字段、保留可空字段的 `null` 默认值，并把 Rhino 的 `volume` JavaBeans 别名映射为 `isVolume`；章节 URL 在 VIP/购买规则前回退，卷 URL 前缀按 `BookChapter.getAbsoluteURL()` 解析到目录页基准 |
+| `flow.synthetic.main-js.chapter-mutations-after-content` | 验证成功的 `getContent` 对 live `BookChapter` 的 title、tag、URL、base URL、index、VIP/购买与卷状态修改在 Kotlin/Rhino 和 TS/QuickJS 中都保留；按 Rhino JavaBeans 名称 `vip/pay/volume` 回写对应的 Kotlin `isVip/isPay/isVolume` 属性 |
+| `flow.synthetic.main-js.empty-content-volume-mutation` | 验证 `getContent` 返回空正文时 Android 使用调用后章节的卷状态判断：脚本将普通章节改成卷后允许空正文，并保留章节字段修改 |
 | `flow.yiove.wensang.discovery-empty-page` | 「文桑小说」原始发现分类和字段规则。比较两个有序结果、空页终态和实际请求顺序 |
 | `flow.android-explore.stale-page-*` | 固定 Android 分页状态机与 reader-web `DiscoveryStore` 对照；覆盖新页完成后旧请求迟到成功或失败，不能改写当前结果或错误 |
 | `flow.synthetic.content-fallback.*` | 合成正文响应。分别验证主规则命中、合法为空后回退、两边均空的终态 |
@@ -111,7 +117,7 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 
 `flow.discoverySelection` 的 TS 端直接调用 reader-web 的 `DiscoveryStore`；Kotlin/JVM 端在普通 JDK 中执行固定 Android `ExplorePaginationState` 摘录。它验证的是发现列表切页时的旧请求隔离，不运行 Android UI 或设备环境。
 
-响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 `rawFields` 等 TS 内部元数据默认不属于流程断言；D17 的两个固定案例会显式观察书级 `updateTime`，验证 Android `SearchBook`/`Book` 未声明该字段且 MainJs 也无法读取它。目录规则的章节更新时间仍单独映射到 `BookChapter.tag`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
+响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 `rawFields` 等 TS 内部元数据默认不属于流程断言；D17 的书级案例显式观察书籍 `updateTime`，验证 Android `SearchBook`/`Book` 未声明该字段且 MainJs 也无法读取它；章节案例验证 `BookChapter` Gson 丢弃未知 `updateTime`，目录案例验证 `TocRule.updateTime` 在读取 `isVolume` 后映射为 `tag`、按 `tocCountWords` 控制字数提取，并按 Android 先读取 VIP/购买规则、后写回两个状态位的顺序运行。目录规则对象案例另外验证 `BookChapter` 的实体字段、可空属性默认值、规则期默认 `index=0` 和 URL 回退时序；卷 URL 前缀与缺失 URL 的占位地址分别按 Android 解析。VIP/购买用例验证对同一章节对象的 `tag/wordCount` 修改进入最终结果。JS 正文与格式化脚本只获得 Android 属性投影；正文修改用例还验证 `getContent` 成功返回后，章节标题、tag、地址、index、VIP/购买和卷状态修改均写回结果对象，Rhino 的 `vip/pay/volume` JavaBeans 别名映射到相应的 Kotlin 属性。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
 
 旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
 

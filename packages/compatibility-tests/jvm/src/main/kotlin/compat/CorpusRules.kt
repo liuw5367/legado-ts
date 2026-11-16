@@ -1,6 +1,7 @@
 package compat
 
 import io.legado.app.constant.AppPattern
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.CorpusJsExtensions
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import org.htmlunit.corejs.javascript.BaseFunction
@@ -58,10 +59,10 @@ internal fun corpusScriptNodes(rule: String, content: String, custom: String): L
 internal fun corpusScriptNodes(rule: String, content: String, variables: MutableMap<String, String>): List<Element> =
     (runCorpusScript(rule, content, true, variables) as List<*>).map { it as Element }
 
-internal fun corpusScriptString(rule: String, content: Any, variables: MutableMap<String, String>): String =
-    runCorpusScript(rule, content, false, variables) as String
+internal fun corpusScriptString(rule: String, content: Any, variables: MutableMap<String, String>, chapter: BookChapter? = null): String =
+    runCorpusScript(rule, content, false, variables, chapter) as String
 
-private fun runCorpusScript(rule: String, content: Any, nodes: Boolean, variables: MutableMap<String, String>): Any? {
+private fun runCorpusScript(rule: String, content: Any, nodes: Boolean, variables: MutableMap<String, String>, chapter: BookChapter? = null): Any? {
     val script = AppPattern.JS_PATTERN.matcher(rule)
     require(script.find()) { "缺少离线 JS 规则" }
     val prefix = rule.substring(0, script.start()).trim()
@@ -71,7 +72,8 @@ private fun runCorpusScript(rule: String, content: Any, nodes: Boolean, variable
 
     return Context.enter().use { engine ->
         val scope = engine.initSafeStandardObjects()
-        engine.setClassShutter { false }
+        // Android AnalyzeRule.evalJS exposes its current BookChapter bean; permit only that fixture type and its String values here.
+        engine.setClassShutter { className -> chapter != null && className in setOf(BookChapter::class.java.name, String::class.java.name) }
         val java = engine.newObject(scope)
         val book = engine.newObject(scope)
         fun bindArgs(target: Scriptable, name: String, callback: (Array<Any>) -> Any?) {
@@ -109,6 +111,7 @@ private fun runCorpusScript(rule: String, content: Any, nodes: Boolean, variable
         }
         scope.put("java", scope, java)
         scope.put("book", scope, book)
+        scope.put("chapter", scope, chapter)
         val initial = when {
             prefix.isEmpty() -> content
             nodes -> select(prefix)

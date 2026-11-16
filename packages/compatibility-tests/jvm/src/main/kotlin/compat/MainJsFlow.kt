@@ -123,8 +123,21 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
         stage("toc", "failed", null)
         return output
     }
-    stage("toc", "success", chapters.map {
-        mapOf("title" to it.title, "url" to it.url, "index" to it.index, "volume" to it.isVolume, "vip" to it.isVip, "pay" to it.isPay)
+    val chapterInfoEvidence = input.get("chapterInfoEvidence")?.asBoolean == true
+    stage("toc", "success", chapters.map { chapter ->
+        buildMap<String, Any> {
+            put("title", chapter.title)
+            put("url", chapter.url)
+            put("index", chapter.index)
+            put("volume", chapter.isVolume)
+            put("vip", chapter.isVip)
+            put("pay", chapter.isPay)
+            if (chapterInfoEvidence) {
+                put("hasUpdateTime", false)
+                chapter.tag?.let { put("tag", it) }
+                chapter.wordCount?.let { put("wordCount", it) }
+            }
+        }
     })
     val index = input.get("chapterIndex").asInt
     val chapter = chapters.getOrNull(index) ?: throw FlowFixtureError("整源 JS 缺少指定章节")
@@ -135,5 +148,18 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
     }
     if (content != null) stage("content", if (content.isNotBlank()) "success" else if (chapter.isVolume) "empty" else "failed",
         content.takeUnless { it.isBlank() && !chapter.isVolume })
+    if (input.get("chapterMutationEvidence")?.asBoolean == true) {
+        stage("chapterAfterContent", "success", mapOf(
+            "title" to chapter.title,
+            "url" to chapter.url,
+            "chapterUrl" to chapter.getAbsoluteURL(),
+            "baseUrl" to chapter.baseUrl,
+            "index" to chapter.index,
+            "isVip" to chapter.isVip,
+            "isPay" to chapter.isPay,
+            "isVolume" to chapter.isVolume,
+            "tag" to chapter.tag,
+        ))
+    }
     return output + ("variableAfterContent" to variables())
 }

@@ -163,7 +163,7 @@ test('目录下一页规则失败或缺少宿主能力时终止并丢弃半份�
 
 test('目录先求下一页规则，再解析当前页章节字段', async () => {
   const calls: string[] = []
-  const bindings: Array<{ field: string; updateTime?: unknown; tag?: unknown; wordCount?: unknown; isVolume?: unknown }> = []
+  const bindings: Array<{ field: string; updateTime?: unknown; tag?: unknown; wordCount?: unknown; isVolume?: unknown; sourceId?: unknown; chapterUrl?: unknown; rawFields?: unknown; index?: unknown; resourceUrl?: unknown; start?: unknown; end?: unknown; startFragmentId?: unknown; endFragmentId?: unknown; variable?: unknown; imgUrl?: unknown; volume?: unknown }> = []
   const orderedSource = {
     ...source,
     ruleToc: {
@@ -186,7 +186,7 @@ test('目录先求下一页规则，再解析当前页章节字段', async () =>
         const chapter = fieldBindings?.chapter
         if (typeof chapter === 'object' && chapter !== null && !Array.isArray(chapter)) {
           const value = chapter as Record<string, unknown>
-          bindings.push({ field, updateTime: value.updateTime, tag: value.tag, wordCount: value.wordCount, isVolume: value.isVolume })
+          bindings.push({ field, updateTime: value.updateTime, tag: value.tag, wordCount: value.wordCount, isVolume: value.isVolume, sourceId: value.sourceId, chapterUrl: value.chapterUrl, rawFields: value.rawFields, index: value.index, resourceUrl: value.resourceUrl, start: value.start, end: value.end, startFragmentId: value.startFragmentId, endFragmentId: value.endFragmentId, variable: value.variable, imgUrl: value.imgUrl, volume: value.volume })
         }
         if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: '/chapter/1' }] }
         if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
@@ -200,7 +200,8 @@ test('目录先求下一页规则，再解析当前页章节字段', async () =>
   }, { source: orderedSource, book })
   assert.equal(result.status, 'success')
   assert.deepEqual(calls.slice(0, 9), ['chapterList', 'nextTocUrl', 'chapterName', 'chapterUrl', 'updateTime', 'isVolume', 'chapterVolume', 'isVip', 'isPay'])
-  assert.deepEqual(bindings.find((item) => item.field === 'isVolume'), { field: 'isVolume', updateTime: '更新 1234字', tag: '更新', wordCount: '1234字', isVolume: false })
+  assert.deepEqual(bindings.find((item) => item.field === 'isVolume'), { field: 'isVolume', updateTime: undefined, tag: null, wordCount: null, isVolume: false, sourceId: undefined, chapterUrl: undefined, rawFields: undefined, index: 0, resourceUrl: null, start: null, end: null, startFragmentId: null, endFragmentId: null, variable: null, imgUrl: null, volume: false })
+  assert.deepEqual(bindings.find((item) => item.field === 'isVip'), { field: 'isVip', updateTime: undefined, tag: '更新', wordCount: '1234字', isVolume: false, sourceId: undefined, chapterUrl: undefined, rawFields: undefined, index: 0, resourceUrl: null, start: null, end: null, startFragmentId: null, endFragmentId: null, variable: null, imgUrl: null, volume: false })
 })
 
 test('目录章节字段规则失败时不返回已解析的半份目录', async () => {
@@ -220,7 +221,7 @@ test('目录章节字段规则失败时不返回已解析的半份目录', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed' && diagnostic.field === 'chapterName'))
 })
 
-test('目录更新时间按 Android 投影 tag 与字数，卷占位使用页内原始索引', async () => {
+test('目录更新时间只投影为 Android tag 与字数，卷占位使用页内原始索引', async () => {
   const sourceWithInfo = {
     ...source,
     ruleToc: { chapterList: 'chapters', chapterName: 'name', chapterUrl: 'url', isVolume: 'volume', updateTime: 'info', nextTocUrl: 'next' },
@@ -251,11 +252,11 @@ test('目录更新时间按 Android 投影 tag 与字数，卷占位使用页内
   }
   const pageBook = { ...book, tocUrl: 'https://source.test/toc' }
   const defaultResult = await loadTableOfContents(ports, { source: sourceWithInfo, book: pageBook })
-  assert.deepEqual(defaultResult.value?.items.map((chapter) => [chapter.title, chapter.chapterUrl, chapter.updateTime, chapter.tag, chapter.wordCount]), [
-    ['第一章', 'https://source.test/c1', '字数：1234字 新更', ' 新更', '1234字'],
-    ['卷二', '卷二2', '字数：99字 卷注', '字数：99字 卷注', undefined],
-    ['卷三', '卷三0', '字数：77字 卷注', '字数：77字 卷注', undefined],
-    ['第二章', 'https://source.test/c2', '更新 88字', '更新', '88字'],
+  assert.deepEqual(defaultResult.value?.items.map((chapter) => [chapter.title, chapter.url, chapter.chapterUrl, chapter.tag, chapter.wordCount, chapter.updateTime]), [
+    ['第一章', '/c1', 'https://source.test/c1', ' 新更', '1234字', undefined],
+    ['卷二', '卷二2', 'https://source.test/toc', '字数：99字 卷注', undefined, undefined],
+    ['卷三', '卷三0', 'https://source.test/toc2', '字数：77字 卷注', undefined, undefined],
+    ['第二章', '/c2', 'https://source.test/c2', '更新', '88字', undefined],
   ])
   const disabled = await loadTableOfContents(ports, { source: sourceWithInfo, book: pageBook, tocCountWords: false })
   assert.deepEqual(disabled.value?.items.map((chapter) => [chapter.tag, chapter.wordCount]), [
@@ -787,7 +788,7 @@ test('正文分页的空页保留 pages 位置并参与换行拼接', async () =
   assert.equal(result.value?.cleaned, '\n第二页正文')
 })
 
-test('JS 正文绑定使用章节原始 URL 与页面基准地址', async () => {
+test('JS 正文绑定只暴露 Android 章节 URL 与页面基准地址字段', async () => {
   let request: { chapter: { url: string | undefined; baseUrl: string | undefined; chapterUrl: string | undefined } } | undefined
   const jsSource = { ...source, mainJs: 'function getContent(chapter) { return chapter.url; }' } as NormalizedSource
   const chapter: ChapterIdentity = {
@@ -811,7 +812,158 @@ test('JS 正文绑定使用章节原始 URL 与页面基准地址', async () => 
   }, { source: jsSource, chapter })
   assert.equal(result.status, 'success')
   assert.equal(result.value?.cleaned, '/raw/chapter')
-  assert.deepEqual(request, { chapter: { url: '/raw/chapter', baseUrl: 'https://source.test/catalog/page.html', chapterUrl: 'https://wrong.test/derived' } })
+  assert.deepEqual(request, { chapter: { url: '/raw/chapter', baseUrl: 'https://source.test/catalog/page.html', chapterUrl: undefined } })
+})
+
+test('JS 正文成功后保留 Android BookChapter 的脚本字段修改', async () => {
+  const jsSource = { ...source, mainJs: 'function getContent(chapter) { chapter.title = "脚本标题"; return "正文"; }' } as NormalizedSource
+  const chapter: ChapterIdentity & { title?: string; tag?: string; isVip?: boolean; isPay?: boolean; isVolume?: boolean; start?: number } = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    url: '/chapter/old',
+    baseUrl: 'https://source.test/catalog/page.html',
+    chapterUrl: 'https://source.test/catalog/chapter/old',
+    index: 0,
+    title: '目录标题',
+    tag: '目录标签',
+    isVip: false,
+    isVolume: false,
+  }
+  const result = await loadChapterContent({
+    network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async ({ bindings }) => {
+        const boundChapter = bindings?.chapter as Record<string, unknown>
+        boundChapter.title = '脚本标题'
+        boundChapter.tag = '脚本标签'
+        boundChapter.vip = true
+        boundChapter.pay = true
+        boundChapter.volume = true
+        boundChapter.url = '../chapter/new'
+        boundChapter.baseUrl = 'https://cdn.test/catalog/page.html'
+        boundChapter.index = 7
+        boundChapter.start = 12
+        return { status: 'success', value: '正文', exists: true }
+      },
+    },
+  }, { source: jsSource, chapter })
+
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.chapter, chapter)
+  assert.deepEqual({
+    title: result.value?.chapter.title,
+    tag: result.value?.chapter.tag,
+    isVip: result.value?.chapter.isVip,
+    isPay: result.value?.chapter.isPay,
+    isVolume: result.value?.chapter.isVolume,
+    url: result.value?.chapter.url,
+    baseUrl: result.value?.chapter.baseUrl,
+    chapterUrl: result.value?.chapter.chapterUrl,
+    index: result.value?.chapter.index,
+    start: result.value?.chapter.start,
+  }, {
+    title: '脚本标题',
+    tag: '脚本标签',
+    isVip: true,
+    isPay: true,
+    isVolume: true,
+    url: '../chapter/new',
+    baseUrl: 'https://cdn.test/catalog/page.html',
+    chapterUrl: 'https://cdn.test/chapter/new',
+    index: 7,
+    start: 12,
+  })
+  assert.equal(result.value?.finalUrl, 'https://cdn.test/chapter/new')
+})
+
+test('JS 正文修改卷标题或清空 URL 后按当前 BookChapter 字段计算绝对地址', async () => {
+  const jsSource = { ...source, mainJs: 'function getContent(chapter) { return "正文"; }' } as NormalizedSource
+  const volumeChapter: ChapterIdentity & { title?: string; isVolume?: boolean } = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    url: '卷一1',
+    baseUrl: 'https://source.test/catalog/page.html',
+    chapterUrl: 'https://source.test/catalog/%E5%8D%B7%E4%B8%801',
+    index: 0,
+    title: '旧标题',
+    isVolume: false,
+  }
+  const volumeResult = await loadChapterContent({
+    network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async ({ bindings }) => {
+        const boundChapter = bindings?.chapter as Record<string, unknown>
+        boundChapter.title = '卷一'
+        boundChapter.volume = true
+        return { status: 'success', value: '正文', exists: true }
+      },
+    },
+  }, { source: jsSource, chapter: volumeChapter })
+  assert.equal(volumeResult.value?.chapter.chapterUrl, 'https://source.test/catalog/page.html')
+
+  const clearedChapter: ChapterIdentity = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    url: '/old',
+    baseUrl: 'https://source.test/catalog/page.html',
+    chapterUrl: 'https://source.test/old',
+    index: 0,
+  }
+  const clearedResult = await loadChapterContent({
+    network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async ({ bindings }) => {
+        const boundChapter = bindings?.chapter as Record<string, unknown>
+        boundChapter.url = ''
+        boundChapter.baseUrl = 'https://cdn.test/catalog/page.html'
+        return { status: 'success', value: '正文', exists: true }
+      },
+    },
+  }, { source: jsSource, chapter: clearedChapter })
+  assert.equal(clearedResult.value?.chapter.chapterUrl, 'https://cdn.test/catalog/page.html')
+})
+
+test('JS 正文空结果按调用后的 BookChapter.isVolume 判断并保留脚本修改', async () => {
+  const jsSource = { ...source, mainJs: 'function getContent(chapter) { return ""; }' } as NormalizedSource
+  const run = async (initialIsVolume: boolean, finalIsVolume: boolean) => {
+    const chapter: ChapterIdentity & { title?: string; isVolume?: boolean; tag?: string } = {
+      sourceId: source.bookSourceUrl,
+      bookUrl: book.bookUrl,
+      url: '/chapter/one',
+      baseUrl: 'https://source.test/catalog/page.html',
+      chapterUrl: 'https://source.test/chapter/one',
+      index: 0,
+      title: '第一章',
+      isVolume: initialIsVolume,
+    }
+    const result = await loadChapterContent({
+      network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+      rules: {
+        evaluate: async () => ({ status: 'empty', value: null }),
+        executeSourceFunction: async ({ bindings }) => {
+          const boundChapter = bindings?.chapter as Record<string, unknown>
+          boundChapter.volume = finalIsVolume
+          boundChapter.tag = '正文规则标签'
+          return { status: 'success', value: '', exists: true }
+        },
+      },
+    }, { source: jsSource, chapter })
+    return { result, chapter }
+  }
+
+  const becameVolume = await run(false, true)
+  assert.equal(becameVolume.result.status, 'empty')
+  assert.equal(becameVolume.result.value?.chapter.isVolume, true)
+  assert.equal(becameVolume.result.value?.chapter.tag, '正文规则标签')
+
+  const ceasedBeingVolume = await run(true, false)
+  assert.equal(ceasedBeingVolume.result.status, 'failed')
+  assert.equal(ceasedBeingVolume.result.value, null)
+  assert.equal(ceasedBeingVolume.chapter.isVolume, false)
+  assert.equal(ceasedBeingVolume.chapter.tag, '正文规则标签')
 })
 
 test('JS 目录失败或取消时不回写调用方书籍变量', async () => {
@@ -1314,7 +1466,7 @@ test('literal 规则中的 @html 不会误判正文类型', async () => {
   assert.equal(result.value?.cleaned, 'keep()@html')
 })
 
-test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverseToc 排序', async () => {
+test('目录保留卷、VIP、购买状态和 Android 章节 tag，并按书籍 reverseToc 排序', async () => {
   const volumeSource = {
     ...source,
     ruleToc: {
@@ -1349,14 +1501,15 @@ test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverse
   const defaultResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'toc' } })
   assert.equal(defaultResult.status, 'success')
   assert.deepEqual(defaultResult.value?.items.map((item) => item.title), ['卷一', '第一章', '卷二'])
-  assert.equal(defaultResult.value?.items[0]?.chapterUrl, '卷一0')
+  assert.equal(defaultResult.value?.items[0]?.chapterUrl, book.bookUrl)
   assert.equal(defaultResult.value?.items[0]?.isVolume, true)
   assert.equal(defaultResult.value?.items[0]?.isVip, true)
   assert.equal(defaultResult.value?.items[0]?.isPay, false)
-  assert.equal(defaultResult.value?.items[0]?.updateTime, '2026-01-01')
+  assert.equal(defaultResult.value?.items[0]?.tag, '2026-01-01')
+  assert.equal(defaultResult.value?.items[0]?.updateTime, undefined)
   assert.equal(defaultResult.value?.items[1]?.volume, '卷一')
   assert.equal(defaultResult.value?.items[1]?.isPay, true)
-  assert.notEqual(defaultResult.value?.items[0]?.chapterUrl, defaultResult.value?.items[2]?.chapterUrl)
+  assert.notEqual(defaultResult.value?.items[0]?.url, defaultResult.value?.items[2]?.url)
 
   const reverseResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'toc', readConfig: { reverseToc: true } } })
   assert.deepEqual(reverseResult.value?.items.map((item) => item.title), ['卷二', '第一章', '卷一'])

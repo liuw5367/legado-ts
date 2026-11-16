@@ -269,7 +269,7 @@ test('JavaScript 目录保留章节元数据投影', async () => {
   const source = {
     bookSourceUrl: 'https://js-toc-fields.test',
     bookSourceName: 'JS TOC Fields',
-    mainJs: 'function getChapters(book) { return [{ title: "第一章", url: "/chapter/1", tag: "更新标签", wordCount: "123", updateTime: "更新时间", resourceUrl: "https://media.test/audio.mp3", start: 12, end: "34", startFragmentId: "frag-a", endFragmentId: "frag-b", imgUrl: "https://img.test/chapter.png" }]; }',
+    mainJs: 'function getChapters(book) { return [{ title: "第一章", url: "/chapter/1", tag: "更新标签", wordCount: "123", updateTime: "更新时间", resourceUrl: "https://media.test/audio.mp3", start: 12, end: "34", startFragmentId: "frag-a", endFragmentId: "frag-b", imgUrl: "https://img.test/chapter.png" }]; }\nfunction getContent(chapter) { return chapter.updateTime === undefined && chapter.rawFields === undefined && chapter.sourceId === undefined && chapter.chapterUrl === undefined && chapter.volume === false && chapter.traceRef === undefined && chapter.variable === null ? "Android字段形状" : "TS字段泄漏"; }',
   } as unknown as NormalizedSource
   const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
   const book = {
@@ -290,7 +290,7 @@ test('JavaScript 目录保留章节元数据投影', async () => {
   assert.ok(chapter)
   assert.equal(chapter.tag, '更新标签')
   assert.equal(chapter.wordCount, '123')
-  assert.equal(chapter.updateTime, '更新时间')
+  assert.equal(chapter.updateTime, undefined)
   assert.equal(chapter.rawFields.tag, '更新标签')
   assert.equal(chapter.rawFields.wordCount, '123')
   assert.equal(chapter.rawFields.updateTime, '更新时间')
@@ -300,6 +300,10 @@ test('JavaScript 目录保留章节元数据投影', async () => {
   assert.equal(chapter.startFragmentId, 'frag-a')
   assert.equal(chapter.endFragmentId, 'frag-b')
   assert.equal(chapter.imgUrl, 'https://img.test/chapter.png')
+
+  const content = await loadChapterContent(ports, { source, chapter: { ...chapter, updateTime: '旧快照更新时间' } })
+  assert.equal(content.status, 'success', JSON.stringify(content.diagnostics))
+  assert.equal(content.value?.raw, 'Android字段形状')
 })
 
 test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {
@@ -500,7 +504,8 @@ test('AllInOne 正则目录行的 $1/$2/$3 可按捕获上下文提取章节字�
   assert.ok(chapter)
   assert.equal(chapter.title, '第一章')
   assert.equal(chapter.chapterUrl, 'https://all-in-one.test/chapter/1')
-  assert.equal(chapter.updateTime, '·最新')
+  assert.equal(chapter.tag, '·最新')
+  assert.equal(chapter.updateTime, undefined)
 })
 
 test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章节正文', async () => {
@@ -977,7 +982,7 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
       chapterName: 'text',
       chapterUrl: 'href',
       preUpdateJs: 'book.tocUrl = fromBookInfo ? "/from-info" : "/updated-toc"',
-      formatJs: 'if (index === 1) { chapter.title = title + "✓"; chapter.url = "formatted"; chapter.baseUrl = "https://format.test/base/"; chapter.isVip = true; chapter.tag = "formatted-tag"; void 0; }',
+      formatJs: 'if (index === 1) { if (chapter.updateTime !== undefined || chapter.rawFields !== undefined || chapter.sourceId !== undefined || chapter.chapterUrl !== undefined || chapter.volume !== false || chapter.traceRef !== undefined || chapter.variable !== null) throw new Error("TS-only chapter field leaked or Android nullable default missing"); chapter.title = title + "✓"; chapter.url = "formatted"; chapter.baseUrl = "https://format.test/base/"; chapter.isVip = true; chapter.tag = "formatted-tag"; void 0; }',
     },
     ruleContent: { content: 'literal:正文' },
   } as unknown as import('../../source-core/src/index.ts').NormalizedSource
@@ -1048,10 +1053,10 @@ test('声明式目录字段的 JavaScript 绑定按字段顺序渐进回写', as
       chapterList: 'a',
       chapterName: '@js:chapter.title = "渐进章"; chapter.title',
       chapterUrl: '@js:chapter.url = "/progressive"; chapter.url',
-      updateTime: '@js:chapter.updateTime = "更新 1234字"; chapter.updateTime',
-      isVolume: '@js:chapter.isVolume = true; chapter.isVolume',
-      isVip: '@js:chapter.tag === "更新 1234字" && chapter.isVolume === true',
-      isPay: '@js:chapter.isVolume === true',
+      updateTime: '@js:"更新 1234字"',
+      isVolume: '@js:chapter.updateTime === undefined && chapter.tag === null && (chapter.isVolume = true)',
+      isVip: '@js:chapter.tag === "更新 1234字" && chapter.wordCount === null && chapter.isVolume === true',
+      isPay: '@js:chapter.isVolume === true && chapter.isVip === false',
     },
   } as unknown as NormalizedSource
   const ports: WorkflowPorts = {
@@ -1077,10 +1082,11 @@ test('声明式目录字段的 JavaScript 绑定按字段顺序渐进回写', as
   assert.equal(chapter?.title, '渐进章')
   assert.equal(chapter?.chapterUrl, 'https://progressive.test/progressive')
   assert.equal(chapter?.isVolume, true)
-  assert.equal(chapter?.isVip, true)
-  assert.equal(chapter?.isPay, true)
+  assert.equal(chapter?.isVip, true, JSON.stringify(chapter))
   assert.equal(chapter?.tag, '更新 1234字')
   assert.equal(chapter?.wordCount, undefined)
+  assert.equal(chapter?.updateTime, undefined)
+  assert.equal(chapter?.isPay, true)
 })
 
 test('目录规则读取 preUpdateJs 更新后的 book 对象', async () => {

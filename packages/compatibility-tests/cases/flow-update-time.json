@@ -204,5 +204,104 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.main-js.chapter-update-time-ignored",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapter Gson projection in JsSourceMarshaller.parseChapters"
+    },
+    "flowOrigin": {
+      "fixture": "Android BookChapter has tag and wordCount but no updateTime property"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "chapter-update-time"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-chapter-update-time.fixture",
+        "bookSourceName": "JS 章节更新时间字段投影",
+        "mainJs": "function search(key,page){return [{name:'章节字段书',bookUrl:baseUrl+'/book',type:8}]}\nfunction explore(url,page){return []}\nfunction getBookInfo(book){return {tocUrl:baseUrl+'/toc'}}\nfunction getChapters(book){return [{title:'第一章',url:'/chapter/1',updateTime:'TS专有更新时间',tag:'Android标签',wordCount:'99字'}]}\nfunction getContent(chapter,book,nextChapterUrl){return (chapter.updateTime===undefined&&chapter.rawFields===undefined&&chapter.sourceId===undefined&&chapter.chapterUrl===undefined&&chapter.volume===false&&chapter.traceRef===undefined&&chapter.variable===null?'android-fields':'ts-fields')+'|'+String(chapter.tag)+'|'+String(chapter.wordCount)}"
+      },
+      "keyword": "chapter-parity",
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "chapterInfoEvidence": true,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-chapter-update-time.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-chapter-update-time.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "章节字段书",
+                "bookUrl": "https://js-chapter-update-time.fixture/book",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "empty",
+            "value": []
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "章节字段书",
+              "bookUrl": "https://js-chapter-update-time.fixture/book",
+              "tocUrl": "https://js-chapter-update-time.fixture/toc",
+              "type": 8,
+              "intro": null,
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "url": "https://js-chapter-update-time.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false,
+                "hasUpdateTime": false,
+                "tag": "Android标签",
+                "wordCount": "99字"
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "android-fields|Android标签|99字"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
   }
 ]

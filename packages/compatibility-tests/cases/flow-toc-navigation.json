@@ -390,7 +390,7 @@
             "value": [
               {
                 "title": "卷一",
-                "chapterUrl": "卷一0",
+                "chapterUrl": "https://toc.fixture.test/toc",
                 "index": 0,
                 "isVolume": true,
                 "isVip": false,
@@ -636,7 +636,7 @@
               },
               {
                 "title": "卷一",
-                "chapterUrl": "卷一0",
+                "chapterUrl": "https://toc.fixture.test/toc",
                 "index": 2,
                 "isVolume": true,
                 "isVip": false,

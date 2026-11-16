@@ -92,5 +92,14 @@ class BookChapter {
     var isVolume = false
     var isVip = false
     var isPay = false
-    fun getAbsoluteURL(): String = io.legado.app.utils.NetworkUtils.getAbsoluteURL(baseUrl, url)
+    var resourceUrl: String? = null
+    var tag: String? = null
+    var wordCount: String? = null
+    var start: Long? = null
+    var end: Long? = null
+    var startFragmentId: String? = null
+    var endFragmentId: String? = null
+    var variable: String? = null
+    var imgUrl: String? = null
+    fun getAbsoluteURL(): String = if (isVolume && url.startsWith(title)) baseUrl else io.legado.app.utils.NetworkUtils.getAbsoluteURL(baseUrl, url)
 }

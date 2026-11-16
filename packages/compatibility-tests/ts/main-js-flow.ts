@@ -19,6 +19,7 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
   const requests: unknown[] = []
   const stages: Record<string, unknown> = {}
   const output = { stages, requests }
+  const chapterInfoEvidence = input.chapterInfoEvidence === true
   let fault: FlowFixtureError | undefined
   const session = createNodeSourceSession(source, {
     network: { request: async (plan) => {
@@ -76,10 +77,18 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
       if (!book) return output
       const toc = await loadTableOfContents(ports, { source, book })
       const chapters = toc.value?.items
-      stage('toc', toc.status, chapters?.map((chapter) => ({
-        title: chapter.title, url: chapter.url, index: chapter.index,
-        volume: chapter.isVolume === true, vip: chapter.isVip === true, pay: chapter.isPay === true,
-      })) ?? null)
+      stage('toc', toc.status, chapters?.map((chapter) => {
+        const value: Record<string, unknown> = {
+          title: chapter.title, url: chapter.url, index: chapter.index,
+          volume: chapter.isVolume === true, vip: chapter.isVip === true, pay: chapter.isPay === true,
+        }
+        if (chapterInfoEvidence) {
+          value.hasUpdateTime = chapter.updateTime !== undefined
+          if (chapter.tag !== undefined) value.tag = chapter.tag
+          if (chapter.wordCount !== undefined) value.wordCount = chapter.wordCount
+        }
+        return value
+      }) ?? null)
       if (!chapters) return output
       const chapter = chapters[Number(input.chapterIndex)]
       if (!chapter) throw new FlowFixtureError('整源 JS 缺少指定章节')
@@ -88,6 +97,20 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
         source, book: toc.value?.bookAfter ?? book, chapter, ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }),
       })
       stage('content', content.status, content.value?.raw ?? null)
+      if (input.chapterMutationEvidence === true && content.value?.chapter) {
+        const after = content.value.chapter
+        stage('chapterAfterContent', 'success', {
+          title: after.title,
+          url: after.url ?? '',
+          chapterUrl: after.chapterUrl,
+          baseUrl: after.baseUrl ?? '',
+          index: after.index,
+          isVip: after.isVip === true,
+          isPay: after.isPay === true,
+          isVolume: after.isVolume === true,
+          tag: after.tag ?? null,
+        })
+      }
       return { ...output, variableAfterContent: variables((toc.value?.bookAfter ?? book).variable) }
     })
   } finally {

@@ -1,0 +1,920 @@
+[
+  {
+    "id": "flow.synthetic.toc.update-time-tag-word-count",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapterList.analyzeChapterList + AppPattern.wordCountRegex"
+    },
+    "flowOrigin": {
+      "fixture": "Android TocRule.updateTime projects to BookChapter.tag and optionally wordCount"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-update-time"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-chapter-update-time.fixture",
+        "bookSourceName": "目录章节更新时间投影",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "updateTime": ".time@text",
+          "isVolume": "@js:chapter.updateTime === undefined && chapter.rawFields === undefined && chapter.sourceId === undefined && chapter.chapterUrl === undefined && chapter.volume === false && chapter.tag == null && chapter.wordCount == null && chapter.resourceUrl === null && chapter.start === null && chapter.end === null && chapter.startFragmentId === null && chapter.endFragmentId === null && chapter.variable === null && chapter.imgUrl === null && String(chapter.title) === '第三章'",
+          "isVip": "@js:String(chapter.tag) === '更新：' && String(chapter.wordCount) === '1.2万字'",
+          "isPay": "@js:String(chapter.isVip) !== 'true' && String(chapter.tag) === '更新：'"
+        }
+      },
+      "book": {
+        "name": "章节更新时间书",
+        "bookUrl": "https://toc-chapter-update-time.fixture/book",
+        "tocUrl": "https://toc-chapter-update-time.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-chapter-update-time.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-chapter-update-time.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MxIj7nrKzkuIDnq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuabtOaWsO+8muWtl+aVsO+8mjEuMuS4h+Wtlzwvc3Bhbj48c3BhbiBjbGFzcz0idm9sdW1lIj5mYWxzZTwvc3Bhbj48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MyIj7nrKzkuoznq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuabtOaWsOS4rTwvc3Bhbj48c3BhbiBjbGFzcz0idm9sdW1lIj5mYWxzZTwvc3Bhbj48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MzIj7nrKzkuInnq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuWtl+aVsO+8mjg45a2XPC9zcGFuPjxzcGFuIGNsYXNzPSJ2b2x1bWUiPnRydWU8L3NwYW4+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jNCI+56ys5Zub56ugPC9hPjxzcGFuIGNsYXNzPSJ0aW1lIj48L3NwYW4+PHNwYW4gY2xhc3M9InZvbHVtZSI+ZmFsc2U8L3NwYW4+PC9saT48L3VsPg=="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c1",
+                "index": 0,
+                "isVip": true,
+                "isPay": true,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": "更新：",
+                "wordCount": "1.2万字"
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c2",
+                "index": 1,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": "更新中"
+              },
+              {
+                "title": "第三章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c3",
+                "index": 2,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": true,
+                "hasUpdateTime": false,
+                "tag": "字数：88字"
+              },
+              {
+                "title": "第四章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c4",
+                "index": 3,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-chapter-update-time.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.update-time-count-words-disabled",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapterList.analyzeChapterList + AppPattern.wordCountRegex"
+    },
+    "flowOrigin": {
+      "fixture": "Android TocRule.updateTime projects to BookChapter.tag and optionally wordCount"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-update-time"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-chapter-update-time.fixture",
+        "bookSourceName": "目录章节更新时间投影",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "updateTime": ".time@text",
+          "isVolume": "@js:chapter.updateTime === undefined && chapter.rawFields === undefined && chapter.sourceId === undefined && chapter.chapterUrl === undefined && chapter.volume === false && chapter.tag == null && chapter.wordCount == null && chapter.resourceUrl === null && chapter.start === null && chapter.end === null && chapter.startFragmentId === null && chapter.endFragmentId === null && chapter.variable === null && chapter.imgUrl === null && String(chapter.title) === '第三章'",
+          "isVip": "@js:String(chapter.tag) === '更新：' && String(chapter.wordCount) === '1.2万字'",
+          "isPay": "@js:String(chapter.isVip) !== 'true' && String(chapter.tag) === '更新：'"
+        }
+      },
+      "book": {
+        "name": "章节更新时间书",
+        "bookUrl": "https://toc-chapter-update-time.fixture/book",
+        "tocUrl": "https://toc-chapter-update-time.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "tocCountWords": false,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-chapter-update-time.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-chapter-update-time.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MxIj7nrKzkuIDnq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuabtOaWsO+8muWtl+aVsO+8mjEuMuS4h+Wtlzwvc3Bhbj48c3BhbiBjbGFzcz0idm9sdW1lIj5mYWxzZTwvc3Bhbj48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MyIj7nrKzkuoznq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuabtOaWsOS4rTwvc3Bhbj48c3BhbiBjbGFzcz0idm9sdW1lIj5mYWxzZTwvc3Bhbj48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MzIj7nrKzkuInnq6A8L2E+PHNwYW4gY2xhc3M9InRpbWUiPuWtl+aVsO+8mjg45a2XPC9zcGFuPjxzcGFuIGNsYXNzPSJ2b2x1bWUiPnRydWU8L3NwYW4+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jNCI+56ys5Zub56ugPC9hPjxzcGFuIGNsYXNzPSJ0aW1lIj48L3NwYW4+PHNwYW4gY2xhc3M9InZvbHVtZSI+ZmFsc2U8L3NwYW4+PC9saT48L3VsPg=="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c1",
+                "index": 0,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": "更新：字数：1.2万字"
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c2",
+                "index": 1,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": "更新中"
+              },
+              {
+                "title": "第三章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c3",
+                "index": 2,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": true,
+                "hasUpdateTime": false,
+                "tag": "字数：88字"
+              },
+              {
+                "title": "第四章",
+                "chapterUrl": "https://toc-chapter-update-time.fixture/c4",
+                "index": 3,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-chapter-update-time.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.vip-pay-rule-mutations",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapterList.analyzeChapterList chapter bean mutation"
+    },
+    "flowOrigin": {
+      "fixture": "Chapter mutations made by VIP and purchase JavaScript remain on the Android BookChapter bean"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-js-mutation"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-chapter-mutation.fixture",
+        "bookSourceName": "目录章节脚本副作用",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "@js:chapter.vip = true; '第一章'",
+          "chapterUrl": "a@href",
+          "isVip": "@js:chapter.vip = true; chapter.tag = 'VIP规则标签'; false",
+          "isPay": "@js:String(chapter.vip) === 'true' && (chapter.pay = true) && (chapter.wordCount = '购买规则字数') && false"
+        }
+      },
+      "book": {
+        "name": "目录章节脚本副作用书",
+        "bookUrl": "https://toc-chapter-mutation.fixture/book",
+        "tocUrl": "https://toc-chapter-mutation.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-chapter-mutation.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-chapter-mutation.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MxIj7nrKzkuIDnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-chapter-mutation.fixture/c1",
+                "index": 0,
+                "isVip": true,
+                "isPay": true,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": "VIP规则标签",
+                "wordCount": "购买规则字数"
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-chapter-mutation.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.android-default-index-during-rules",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapter default index during BookChapterList.analyzeChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "BookChapter.index is initialized to zero and assigned its final position only after all chapter rules run"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-index"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-chapter-index.fixture",
+        "bookSourceName": "目录规则默认章节序号",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "isVip": "@js:chapter.index === 0"
+        }
+      },
+      "book": {
+        "name": "目录规则默认章节序号书",
+        "bookUrl": "https://toc-chapter-index.fixture/book",
+        "tocUrl": "https://toc-chapter-index.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-chapter-index.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-chapter-index.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MxIj7nrKzkuIDnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jMiI+56ys5LqM56ugPC9hPjwvbGk+PC91bD4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-chapter-index.fixture/c1",
+                "index": 0,
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://toc-chapter-index.fixture/c2",
+                "index": 1,
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-chapter-index.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.url-fallback-before-vip-pay",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapterList.analyzeChapterList URL fallback ordering"
+    },
+    "flowOrigin": {
+      "fixture": "Android fills an empty chapter URL before evaluating VIP and purchase rules"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-url-fallback"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-url-fallback.fixture",
+        "bookSourceName": "目录 URL 回退顺序",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "isVip": "@js:String(chapter.url) === 'https://toc-url-fallback.fixture/toc'"
+        }
+      },
+      "book": {
+        "name": "目录 URL 回退顺序书",
+        "bookUrl": "https://toc-url-fallback.fixture/book",
+        "tocUrl": "https://toc-url-fallback.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-url-fallback.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-url-fallback.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGE+56ys5LiA56ugPC9hPjwvbGk+PC91bD4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-url-fallback.fixture/toc",
+                "index": 0,
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-url-fallback.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.volume-url-fallback-before-vip-pay",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapterList.analyzeChapterList volume URL fallback ordering"
+    },
+    "flowOrigin": {
+      "fixture": "Android gives a URL-less volume its page-local synthetic URL before VIP and purchase rules"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-url-fallback",
+      "chapter-volume"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-volume-url-fallback.fixture",
+        "bookSourceName": "目录卷 URL 回退顺序",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "isVolume": "@js:String(chapter.title) === '卷一'",
+          "isVip": "@js:String(chapter.url) === '卷一1'"
+        }
+      },
+      "book": {
+        "name": "目录卷 URL 回退顺序书",
+        "bookUrl": "https://toc-volume-url-fallback.fixture/book",
+        "tocUrl": "https://toc-volume-url-fallback.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-volume-url-fallback.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-volume-url-fallback.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2MxIj7nrKzkuIDnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhPuWNt+S4gDwvYT48L2xpPjwvdWw+"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc-volume-url-fallback.fixture/c1",
+                "index": 0,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "hasUpdateTime": false,
+                "tag": ""
+              },
+              {
+                "title": "卷一",
+                "chapterUrl": "https://toc-volume-url-fallback.fixture/toc",
+                "index": 1,
+                "isVip": true,
+                "isPay": false,
+                "isVolume": true,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-volume-url-fallback.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.volume-url-prefix-resolution",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android BookChapter.getAbsoluteURL volume URL prefix behavior"
+    },
+    "flowOrigin": {
+      "fixture": "A nonempty volume URL beginning with its title resolves to BookChapter.baseUrl on Android"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "chapter-volume",
+      "chapter-url-resolution"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc-volume-prefix.fixture",
+        "bookSourceName": "目录卷 URL 前缀解析",
+        "ruleToc": {
+          "chapterList": "li.chapter",
+          "chapterName": "a@text",
+          "chapterUrl": "@js:'卷一-extra'",
+          "isVolume": "@js:String(chapter.title) === '卷一'",
+          "isVip": "@js:String(chapter.url) === '卷一-extra'"
+        }
+      },
+      "book": {
+        "name": "目录卷 URL 前缀解析书",
+        "bookUrl": "https://toc-volume-prefix.fixture/book",
+        "tocUrl": "https://toc-volume-prefix.fixture/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "chapterInfoEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://toc-volume-prefix.fixture/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc-volume-prefix.fixture/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGE+5Y235LiAPC9hPjwvbGk+PC91bD4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "chapterUrl": "https://toc-volume-prefix.fixture/toc",
+                "index": 0,
+                "isVip": true,
+                "isPay": false,
+                "isVolume": true,
+                "hasUpdateTime": false,
+                "tag": ""
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc-volume-prefix.fixture/toc",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.chapter-mutations-after-content",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android JsBookSource.getContent mutates BookChapter bean"
+    },
+    "flowOrigin": {
+      "fixture": "Successful getContent mutations remain visible on the live BookChapter bean"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "chapter-mutation"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-chapter-mutation.fixture",
+        "bookSourceName": "正文章节对象修改",
+        "bookSourceType": 0,
+        "mainJs": "function search(key,page){return [{name:'章节修改书',bookUrl:baseUrl+'/book',type:8}]}\nfunction explore(url,page){return []}\nfunction getBookInfo(book){return {tocUrl:baseUrl+'/toc'}}\nfunction getChapters(book){return [{title:'目录标题',url:'/chapter/old',tag:'目录标签'}]}\nfunction getContent(chapter,book,nextChapterUrl){try{chapter.title='卷一';chapter.tag='脚本标签';chapter.vip=true;chapter.pay=true;chapter.volume=true;chapter.url='卷一1';chapter.baseUrl='https://cdn.test/catalog/page.html';chapter.index=7;return '正文'}catch(e){return 'ERR:'+e}}"
+      },
+      "keyword": "章节修改书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-chapter-mutation.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-chapter-mutation.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "chapterMutationEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "章节修改书",
+                "bookUrl": "https://js-chapter-mutation.fixture/book",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "empty",
+            "value": []
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "章节修改书",
+              "bookUrl": "https://js-chapter-mutation.fixture/book",
+              "tocUrl": "https://js-chapter-mutation.fixture/toc",
+              "type": 8,
+              "intro": null,
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "目录标题",
+                "url": "https://js-chapter-mutation.fixture/chapter/old",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "正文"
+          },
+          "chapterAfterContent": {
+            "status": "success",
+            "value": {
+              "title": "卷一",
+              "url": "卷一1",
+              "chapterUrl": "https://cdn.test/catalog/page.html",
+              "baseUrl": "https://cdn.test/catalog/page.html",
+              "index": 7,
+              "isVip": true,
+              "isPay": true,
+              "isVolume": true,
+              "tag": "脚本标签"
+            }
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.empty-content-volume-mutation",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android JsBookSource.getContent mutates BookChapter bean"
+    },
+    "flowOrigin": {
+      "fixture": "An empty getContent result is accepted when the call changes the live chapter bean to a volume"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "chapter-mutation"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-chapter-mutation.fixture",
+        "bookSourceName": "章节修改书",
+        "bookSourceType": 0,
+        "mainJs": "function search(key,page){return [{name:'章节修改书',bookUrl:baseUrl+'/book',type:8}]}\nfunction explore(url,page){return []}\nfunction getBookInfo(book){return {tocUrl:baseUrl+'/toc'}}\nfunction getChapters(book){return [{title:'目录标题',url:'/chapter/old',tag:'目录标签'}]}\nfunction getContent(chapter,book,nextChapterUrl){try{chapter.title='卷一';chapter.tag='脚本标签';chapter.vip=true;chapter.pay=true;chapter.volume=true;chapter.url='卷一1';chapter.baseUrl='https://cdn.test/catalog/page.html';chapter.index=7;return ''}catch(e){return 'ERR:'+e}}"
+      },
+      "keyword": "章节修改书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-chapter-mutation.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-chapter-mutation.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "chapterMutationEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "章节修改书",
+                "bookUrl": "https://js-chapter-mutation.fixture/book",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "empty",
+            "value": []
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "章节修改书",
+              "bookUrl": "https://js-chapter-mutation.fixture/book",
+              "tocUrl": "https://js-chapter-mutation.fixture/toc",
+              "type": 8,
+              "intro": null,
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "目录标题",
+                "url": "https://js-chapter-mutation.fixture/chapter/old",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "empty",
+            "value": ""
+          },
+          "chapterAfterContent": {
+            "status": "success",
+            "value": {
+              "title": "卷一",
+              "url": "卷一1",
+              "chapterUrl": "https://cdn.test/catalog/page.html",
+              "baseUrl": "https://cdn.test/catalog/page.html",
+              "index": 7,
+              "isVip": true,
+              "isPay": true,
+              "isVolume": true,
+              "tag": "脚本标签"
+            }
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  }
+]

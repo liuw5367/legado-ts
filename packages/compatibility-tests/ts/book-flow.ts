@@ -1,7 +1,7 @@
 import {
   discoverBooks, importSources, parseExploreKinds, loadBookDetails, loadChapterContent, loadTableOfContents, nextChapterUrlFor, searchBooks,
 } from '../../source-core/src/index.ts'
-import type { BookCandidate, BookMetadata, NetworkHost, PageCursor, RuntimeResult, WorkflowPorts } from '../../source-core/src/index.ts'
+import type { BookCandidate, BookMetadata, Chapter, NetworkHost, PageCursor, RuntimeResult, WorkflowPorts } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../../source-node/src/cookies.ts'
 import { SourceRequestHost } from '../../source-node/src/source-request-host.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
@@ -33,6 +33,7 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
   const includeUpdateTimeEvidence = input.updateTimeEvidence === true
+  const includeChapterInfoEvidence = input.chapterInfoEvidence === true
   const declaredHeaders = typeof imported.header === 'string'
     ? (imported.header.trim().startsWith('{') ? JSON.parse(imported.header) as Record<string, string> : undefined)
     : imported.header
@@ -142,11 +143,11 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
   if (!book) return output
 
   stage = 'toc'
-  const toc = await loadTableOfContents(ports, { source: imported, book })
+  const toc = await loadTableOfContents(ports, { source: imported, book, tocCountWords: input.tocCountWords !== false })
   const chapterIndex = Number(input.chapterIndex ?? 0)
   const chapter = toc.value?.items[chapterIndex]
   if (toc.value?.items.length && !chapter) throw new FlowFixtureError(`目录没有指定章节: ${chapterIndex}`)
-  record(toc, toc.value?.items.map(({ title, chapterUrl, index, isVip, isPay, isVolume }) => ({ title, chapterUrl, index, isVip: isVip === true, isPay: isPay === true, isVolume: isVolume === true })) ?? null, 'toc-empty', toc.value?.bookAfter ?? book)
+  record(toc, toc.value?.items.map((item) => chapterFields(item, includeChapterInfoEvidence)) ?? null, 'toc-empty', toc.value?.bookAfter ?? book)
   if (mode === 'toc' || !chapter) return output
 
   stage = 'content'
@@ -154,4 +155,21 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
   const content = await loadChapterContent(ports, { source: imported, book, chapter, ...(next === undefined ? {} : { nextChapterUrl: next }) })
   record(content, content.value ? { title: content.value.title ?? chapter.title, pageCount: content.value.pages.length, cleaned: content.value.cleaned } : null, 'content-empty')
   return output
+}
+
+function chapterFields(chapter: Chapter, includeEvidence: boolean): Record<string, unknown> {
+  const value: Record<string, unknown> = {
+    title: chapter.title,
+    chapterUrl: chapter.chapterUrl,
+    index: chapter.index,
+    isVip: chapter.isVip === true,
+    isPay: chapter.isPay === true,
+    isVolume: chapter.isVolume === true,
+  }
+  if (includeEvidence) {
+    value.hasUpdateTime = chapter.updateTime !== undefined
+    if (chapter.tag !== undefined) value.tag = chapter.tag
+    if (chapter.wordCount !== undefined) value.wordCount = chapter.wordCount
+  }
+  return value
 }

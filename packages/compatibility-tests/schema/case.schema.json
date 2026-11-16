@@ -1667,6 +1667,12 @@
               },
               "updateTimeEvidence": {
                 "type": "boolean"
+              },
+              "chapterInfoEvidence": {
+                "type": "boolean"
+              },
+              "tocCountWords": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -1716,6 +1722,12 @@
                 "type": "integer"
               },
               "updateTimeEvidence": {
+                "type": "boolean"
+              },
+              "chapterInfoEvidence": {
+                "type": "boolean"
+              },
+              "chapterMutationEvidence": {
                 "type": "boolean"
               }
             },
@@ -1843,6 +1855,12 @@
               },
               "requestLimit": {
                 "type": "integer"
+              },
+              "chapterInfoEvidence": {
+                "type": "boolean"
+              },
+              "tocCountWords": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

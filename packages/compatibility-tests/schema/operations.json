@@ -471,7 +471,9 @@
       "requestHeaderNames": "strings",
       "requestDefaults": "object",
       "exactRequestHeaders": "boolean",
-      "updateTimeEvidence": "boolean"
+      "updateTimeEvidence": "boolean",
+      "chapterInfoEvidence": "boolean",
+      "tocCountWords": "boolean"
     }
   },
   "flow.mainJs": {
@@ -484,7 +486,9 @@
       "chapterIndex": "integer",
       "searchBookEvidence": "boolean",
       "initialBookType": "integer",
-      "updateTimeEvidence": "boolean"
+      "updateTimeEvidence": "boolean",
+      "chapterInfoEvidence": "boolean",
+      "chapterMutationEvidence": "boolean"
     }
   },
   "flow.discover": {
@@ -521,7 +525,9 @@
       "bookVariables": "object",
       "variableKeys": "strings",
       "responses": "object",
-      "requestLimit": "integer"
+      "requestLimit": "integer",
+      "chapterInfoEvidence": "boolean",
+      "tocCountWords": "boolean"
     }
   },
   "rule.bridgeString": {

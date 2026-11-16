@@ -3,6 +3,7 @@ package compat
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.legado.app.constant.AppPattern
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import io.legado.app.model.analyzeRule.AnalyzeByJSonPath
 import io.legado.app.utils.FlowHtmlFormatter
@@ -110,10 +111,10 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
             }
         }
     }
-    fun field(rule: String, body: Any, unescape: Boolean = true): String {
+    fun field(rule: String, body: Any, unescape: Boolean = true, chapter: BookChapter? = null): String {
         if (rule.isEmpty()) return ""
         val value = when {
-            AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptString(rule, body, variables)
+            AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptString(rule, body, variables, chapter)
             rule.startsWith("$.") || rule.startsWith("$[") -> AnalyzeByJSonPath(body).getString(rule).orEmpty()
             else -> corpusCssString(rule, body)
         }
@@ -171,9 +172,11 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
     }
 
     val tocUrl: String
+    var currentBookUrl = ""
     val cachedToc: Pair<String, String>?
     if (tocOnly) {
         tocUrl = input.rule("book").text("tocUrl")
+        currentBookUrl = input.rule("book").text("bookUrl")
         cachedToc = null
     } else {
         val searchRule = source.rule("ruleSearch")
@@ -221,6 +224,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
         val candidate = candidates.firstOrNull() ?: return output
 
         val bookUrl = candidate.getValue("bookUrl")
+        currentBookUrl = bookUrl
         val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else {
             val plan = FlowRequest(bookUrl, applyRequestDefaults(bookUrl, headers))
             val detailResponse = fetch("detail", plan)
@@ -255,19 +259,53 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
     var pageBase = tocBase
     var tocRequestUrl = tocUrl
     val visitedToc = mutableSetOf(tocBase)
+    val tocCountWords = input.get("tocCountWords")?.takeUnless { it.isJsonNull }?.asBoolean ?: true
+    val chapterInfoEvidence = input.get("chapterInfoEvidence")?.asBoolean == true
     while (true) {
         nodes(chapterRule, tocPage).forEachIndexed { index, node ->
-            val title = field(tocRule.text("chapterName"), node)
-            val url = field(tocRule.text("chapterUrl"), node)
-            val isVolume = field(tocRule.text("isVolume"), node).isTrue()
+            val chapterState = BookChapter().apply { bookUrl = currentBookUrl; baseUrl = pageBase }
+            val title = field(tocRule.text("chapterName"), node, chapter = chapterState)
+            chapterState.title = title
+            val url = field(tocRule.text("chapterUrl"), node, chapter = chapterState)
+            chapterState.url = url
+            val updateTime = field(tocRule.text("updateTime"), node, chapter = chapterState)
+            val isVolume = field(tocRule.text("isVolume"), node, chapter = chapterState).isTrue()
+            chapterState.isVolume = isVolume
+            val tag: String
+            var wordCount: String? = null
+            if (isVolume || !tocCountWords) {
+                tag = updateTime
+            } else {
+                val match = AppPattern.wordCountRegex.find(updateTime)
+                if (match == null) {
+                    tag = updateTime
+                } else {
+                    wordCount = match.groupValues[1].trim()
+                    tag = updateTime.replaceFirst(match.value, "")
+                }
+            }
+            chapterState.tag = tag
+            chapterState.wordCount = wordCount
             val rawUrl = url.ifEmpty { if (isVolume) title + index else tocRequestUrl }
-            if (title.isNotEmpty()) candidatesByPage.add(mapOf(
-                "title" to title, "url" to rawUrl,
-                "chapterUrl" to if (isVolume && rawUrl.startsWith(title)) rawUrl else resolve(pageBase, rawUrl),
-                "isVip" to field(tocRule.text("isVip"), node).isTrue(),
-                "isPay" to field(tocRule.text("isPay"), node).isTrue(),
-                "isVolume" to isVolume,
-            ))
+            chapterState.url = rawUrl
+            val isVip = title.isNotEmpty() && field(tocRule.text("isVip"), node, chapter = chapterState).isTrue()
+            val isPay = title.isNotEmpty() && field(tocRule.text("isPay"), node, chapter = chapterState).isTrue()
+            if (isVip) chapterState.isVip = true
+            if (isPay) chapterState.isPay = true
+            if (title.isNotEmpty()) {
+                val finalUrl = chapterState.url
+                val chapter = mutableMapOf<String, Any>(
+                    "title" to chapterState.title,
+                    "url" to finalUrl,
+                    "chapterUrl" to if (chapterState.isVolume && finalUrl.startsWith(chapterState.title)) pageBase else resolve(pageBase, finalUrl),
+                    "isVip" to chapterState.isVip,
+                    "isPay" to chapterState.isPay,
+                    "isVolume" to chapterState.isVolume,
+                )
+                chapterState.tag?.let { chapter["tag"] = it }
+                chapterState.wordCount?.let { chapter["wordCount"] = it }
+                candidatesByPage.add(chapter)
+            }
         }
         if (nextToc.isEmpty()) break
         val nextLinks = AnalyzeByJSoup(tocPage).getStringList(nextToc).filter { it.isNotBlank() }
@@ -289,7 +327,11 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
         result("toc", "failed", null, mapOf("category" to "toc-empty", "class" to "TocEmptyException", "message" to "Chapters is empty"))
         return output
     }
-    result("toc", "success", chapters.map { it - "url" })
+    result("toc", "success", chapters.map { chapter ->
+        val projected = chapter - "url"
+        if (chapterInfoEvidence) projected + ("hasUpdateTime" to false)
+        else projected - "tag" - "wordCount"
+    })
     if (tocOnly) return output
 
     val chapterIndex = input.get("chapterIndex")?.asInt ?: 0

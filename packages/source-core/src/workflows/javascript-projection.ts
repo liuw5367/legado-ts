@@ -38,14 +38,31 @@ export function javascriptBookProjection(book: JavaScriptBook, source: Normalize
 }
 
 /** Project the Chapter object passed to getContent without resolving Android's raw fields again. */
-export function javascriptChapterProjection(chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }): (ChapterIdentity & { title: string; variable?: string; rawFields?: JsonObject }) & Record<string, unknown> {
+export function javascriptChapterProjection(chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }): Record<string, unknown> {
+  // Android 将 JS 返回的章节 Gson 反序列化为 BookChapter；只把实体声明的属性交给后续 JS。
+  // 这也保留实体构造时 String?/Long? 字段的 null 默认值，而不把 TS 的内部身份字段泄漏给脚本。
   return {
-    ...(chapter.rawFields ?? {}),
-    ...chapter,
-    url: chapter.url ?? chapter.chapterUrl,
-    baseUrl: chapter.baseUrl ?? '',
-    chapterUrl: chapter.chapterUrl,
+    url: chapter.url ?? chapter.chapterUrl ?? '',
     title: chapter.title ?? '',
+    isVolume: chapter.isVolume ?? false,
+    // Rhino exposes Kotlin `isVolume` as the JavaBeans property `volume` as well.
+    volume: chapter.isVolume ?? false,
+    baseUrl: chapter.baseUrl ?? '',
+    bookUrl: chapter.bookUrl,
+    index: chapter.index,
+    isVip: chapter.isVip ?? false,
+    vip: chapter.isVip ?? false,
+    isPay: chapter.isPay ?? false,
+    pay: chapter.isPay ?? false,
+    resourceUrl: chapter.resourceUrl ?? null,
+    tag: chapter.tag ?? null,
+    wordCount: chapter.wordCount ?? null,
+    start: chapter.start ?? null,
+    end: chapter.end ?? null,
+    startFragmentId: chapter.startFragmentId ?? null,
+    endFragmentId: chapter.endFragmentId ?? null,
+    variable: chapter.variable ?? null,
+    imgUrl: chapter.imgUrl ?? null,
   }
 }
 
