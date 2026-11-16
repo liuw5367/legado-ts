@@ -12,24 +12,59 @@ internal fun scriptLibraryEvidence(input: JsonObject): Any {
     val kind = input.get("kind").asString
     val library = input.get("library").asString
     val program = input.get("program").asString
-    val libraryHash = MessageDigest.getInstance("MD5").digest(library.toByteArray(Charsets.UTF_8))
-    val prefix = "${HexFormat.of().formatHex(libraryHash)}:"
     return Context.enter().use { engine ->
         engine.languageVersion = Context.VERSION_ES6
         engine.timeZone = TimeZone.getTimeZone("UTC")
         engine.setClassShutter { false }
 
-        fun loadLibrary(): ScriptBindings = ScriptBindings().also { scope ->
-            engine.evaluateString(scope, library, "fixture-library", 1, null)
+        fun prefix(sourceLibrary: String): String {
+            val hash = MessageDigest.getInstance("MD5").digest(sourceLibrary.toByteArray(Charsets.UTF_8))
+            return "${HexFormat.of().formatHex(hash)}:"
+        }
+
+        val libraryScopes = mutableMapOf<String, ScriptBindings>()
+        val sourceVariables = mutableMapOf<String, String>()
+        var cacheValue = "0"
+
+        fun loadLibrary(sourceLibrary: String): ScriptBindings = ScriptBindings().also { scope ->
+            engine.evaluateString(scope, sourceLibrary, "fixture-library", 1, null)
             scope.globalThis.preventExtensions()
         }
 
-        var libraryScope = loadLibrary()
-        fun evaluate(sourceKey: String): Any {
+        fun libraryScope(sourceLibrary: String): ScriptBindings {
+            val key = prefix(sourceLibrary)
+            return libraryScopes.getOrPut(key) { loadLibrary(sourceLibrary) }
+        }
+
+        fun removeLibrary(sourceLibrary: String) {
+            val key = prefix(sourceLibrary)
+            ScriptBindings.removeSharedGlobalStates(key)
+            libraryScopes.remove(key)
+        }
+
+        fun evaluate(sourceKey: String, sourceLibrary: String = library): Any {
             val scope = ScriptBindings()
-            scope.chainTo(libraryScope, ScriptBindings.getSharedGlobalStateHandle("$prefix$sourceKey"))
+            val stateKey = "${prefix(sourceLibrary)}$sourceKey"
+            scope.chainTo(libraryScope(sourceLibrary), ScriptBindings.getSharedGlobalStateHandle(stateKey))
+            if (kind == "peer-refresh") {
+                scope.put("__fixtureSourceValue", sourceVariables[sourceKey] ?: "0")
+                scope.put("__fixtureCacheValue", cacheValue)
+                engine.evaluateString(
+                    scope,
+                    "var java = {get:function(key){return String(key)==='fixtureVariable'?__fixtureSourceValue:'';},put:function(key,value){if(String(key)==='fixtureVariable')__fixtureSourceValue=String(value);return String(value);}}; " +
+                        "var cache = {get:function(key){return String(key)==='fixtureCache'?__fixtureCacheValue:null;},put:function(key,value){if(String(key)==='fixtureCache')__fixtureCacheValue=String(value);return String(value);}};",
+                    "fixture-host-bridge",
+                    1,
+                    null,
+                )
+            }
             val value = engine.evaluateString(scope, program, "fixture-script", 1, null)
-            return JsonParser.parseString(Context.toString(value))
+            val result = JsonParser.parseString(Context.toString(value))
+            if (kind == "peer-refresh") {
+                sourceVariables[sourceKey] = result.asJsonObject.get("sourceValue").asString
+                cacheValue = result.asJsonObject.get("cacheValue").asString
+            }
+            return result
         }
 
         try {
@@ -37,21 +72,32 @@ internal fun scriptLibraryEvidence(input: JsonObject): Any {
                 "date" -> evaluate("a")
                 "closure" -> {
                     val beforeRefresh = listOf(evaluate("a"), evaluate("a"))
-                    ScriptBindings.removeSharedGlobalStates(prefix)
-                    libraryScope = loadLibrary()
+                    removeLibrary(library)
                     beforeRefresh + evaluate("a")
                 }
-                "scope", "peer-refresh" -> {
+                "peer-refresh" -> {
+                    val differentLibrary = "$library\n// distinct library"
+                    val beforeRefresh = listOf(
+                        evaluate("a"),
+                        evaluate("a"),
+                        evaluate("b"),
+                        evaluate("c", differentLibrary),
+                        evaluate("c", differentLibrary),
+                    )
+                    // SharedJsScope.remove(jsLib) uses the raw library digest, so a different library keeps its scope and state.
+                    removeLibrary(library)
+                    beforeRefresh + listOf(evaluate("a"), evaluate("b"), evaluate("c", differentLibrary))
+                }
+                "scope" -> {
                     val beforeRefresh = listOf(evaluate("a"), evaluate("a"), evaluate("b"))
                     // SharedJsScope.remove 用库摘要前缀使来源状态失效，并丢弃缓存库作用域。
-                    ScriptBindings.removeSharedGlobalStates(prefix)
-                    libraryScope = loadLibrary()
-                    beforeRefresh + evaluate(if (kind == "scope") "a" else "b")
+                    removeLibrary(library)
+                    beforeRefresh + evaluate("a")
                 }
                 else -> throw Unsupported("未知 jsLib 案例")
             }
         } finally {
-            ScriptBindings.removeSharedGlobalStates(prefix)
+            (libraryScopes.keys + prefix(library)).forEach(ScriptBindings::removeSharedGlobalStates)
         }
     }
 }

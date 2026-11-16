@@ -170,6 +170,39 @@ test('reader-web shares Android CacheManager raw keys across sources for one use
   assert.equal(isolated.candidates[0]?.candidate.name, 'missing||')
 })
 
+test('reader-web refreshJSLib clears same-library peer globals while preserving source variables and CacheManager values', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const sourceAUrl = 'https://8.8.4.32/source-a'
+  const sourceBUrl = 'https://8.8.4.33/source-b'
+  const library = 'function nextCount(value) { return (value || 0) + 1; }'
+  const mainJs = (bookUrl: string, allowRefresh = false) => `function search(key){
+    if (${allowRefresh ? 'key === "refresh"' : 'false'}) {
+      source.refreshJSLib();
+      return [{name:"refreshed",bookUrl:"${bookUrl}"}];
+    }
+    globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter);
+    var fixtureSourceValue = Number(java.get("fixtureVariable") || 0) + 1;
+    java.put("fixtureVariable", String(fixtureSourceValue));
+    var fixtureCacheValue = Number(cache.get("fixtureCache") || 0) + 1;
+    cache.put("fixtureCache", String(fixtureCacheValue));
+    return [{name:[globalThis.fixtureCounter,fixtureSourceValue,fixtureCacheValue].join("|"),bookUrl:"${bookUrl}"}];
+  }`
+  await importBatch(repository, user, [
+    { ...sourceDefinition(sourceAUrl), jsLib: library, mainJs: mainJs(`${sourceAUrl}/book`, true) },
+    { ...sourceDefinition(sourceBUrl), jsLib: library, mainJs: mainJs(`${sourceBUrl}/book`) },
+  ])
+  const runtime = createReaderRuntime(repository)
+  const search = async (sourceId: string, keyword: string) => {
+    const run = await repository.createSearch(user, { keyword, sourceId, sourceIds: [sourceId] })
+    return runtime.runSearchBatch(user, run.id)
+  }
+
+  assert.equal((await search(sourceAUrl, 'first')).candidates[0]?.candidate.name, '1|1|1')
+  assert.equal((await search(sourceBUrl, 'second')).candidates[0]?.candidate.name, '1|1|2')
+  assert.equal((await search(sourceAUrl, 'refresh')).candidates[0]?.candidate.name, 'refreshed')
+  assert.equal((await search(sourceBUrl, 'after-refresh')).candidates[0]?.candidate.name, '1|2|3')
+})
+
 test('reader-web search parses Android balanced inline JSONPath in a source response', async (t) => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.9'

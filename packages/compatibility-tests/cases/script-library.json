@@ -61,7 +61,7 @@
     "input": {
       "kind": "peer-refresh",
       "library": "function nextCount(value) { return (value || 0) + 1; }",
-      "program": "globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter); JSON.stringify(globalThis.fixtureCounter)"
+      "program": "(function(){ globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter); var sourceValue = Number(java.get('fixtureVariable') || 0) + 1; java.put('fixtureVariable', String(sourceValue)); var cacheValue = Number(cache.get('fixtureCache') || 0) + 1; cache.put('fixtureCache', String(cacheValue)); return JSON.stringify({counter:globalThis.fixtureCounter,sourceValue:sourceValue,cacheValue:cacheValue}); })()"
     },
     "reference": {
       "kind": "upstream-guided-flow",
@@ -70,14 +70,6 @@
     "tags": [
       "state",
       "boundary"
-    ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/3",
-        "jvm": 1,
-        "ts": 2,
-        "reason": "Android 按库摘要清除所有引用该库的来源级状态。TS 保留其他书源会话的独立状态。"
-      }
     ]
   },
   {

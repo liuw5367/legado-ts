@@ -2366,6 +2366,9 @@ function textValue(value: unknown): string {
 
 const sourceCacheJsonPrefix = '__legado_cache_json_v1__:'
 const sourceCacheBytesPrefix = '__legado_cache_bytes_v1__:'
+const jsLibStateGroupPrefix = 'jsLibStateGroup:'
+const sourceScriptCacheLockTarget = Symbol.for('legado.source-script-cache-lock-target')
+const jsLibStateLockQueues = new WeakMap<object, Map<string, Promise<void>>>()
 
 function encodeSourceCacheValue(encoding: EncodingHost, value: unknown): string {
   if (typeof value === 'string') return value
@@ -3012,7 +3015,6 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly sessionSourceVariables = new Map<string, string>()
   private readonly sessionSourceValues = new Map<string, Map<string, string>>()
   private readonly jsLibClearGenerations = new Map<string, number>()
-  private readonly jsLibStateQueues = new Map<string, Promise<void>>()
   private readonly activeJsLibOwners = new WeakSet<object>()
   private readonly fontMappings = new Map<string, FontMapping>()
   private nextFontId = 0
@@ -3635,11 +3637,18 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private async acquireJsLibStateLock(key: string, signal: AbortSignal): Promise<() => void> {
-    const previous = this.jsLibStateQueues.get(key)
+    const target = Reflect.get(this.cache, sourceScriptCacheLockTarget)
+    const lockTarget = typeof target === 'object' && target !== null ? target : this.cache
+    let queues = jsLibStateLockQueues.get(lockTarget)
+    if (queues === undefined) {
+      queues = new Map<string, Promise<void>>()
+      jsLibStateLockQueues.set(lockTarget, queues)
+    }
+    const previous = queues.get(key)
     let releaseGate!: () => void
     const gate = new Promise<void>((resolve) => { releaseGate = resolve })
     const queued = (previous ?? Promise.resolve()).then(() => gate)
-    this.jsLibStateQueues.set(key, queued)
+    queues.set(key, queued)
     let removeAbortListener: (() => void) | undefined
     try {
       if (previous !== undefined) {
@@ -3654,7 +3663,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     } catch (error) {
       removeAbortListener?.()
       releaseGate()
-      if (this.jsLibStateQueues.get(key) === queued) this.jsLibStateQueues.delete(key)
+      if (queues.get(key) === queued) queues.delete(key)
       throw error
     }
     removeAbortListener?.()
@@ -3663,8 +3672,20 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (released) return
       released = true
       releaseGate()
-      if (this.jsLibStateQueues.get(key) === queued) this.jsLibStateQueues.delete(key)
+      if (queues.get(key) === queued) queues.delete(key)
     }
+  }
+
+  private jsLibStateGroupKey(value: string): string {
+    const sharedCache = Reflect.get(this.cache, sourceScriptCacheLockTarget)
+    const hostScope = typeof sharedCache === 'object' && sharedCache !== null ? '' : `${this.jsLibSessionId}:`
+    return `${jsLibStateGroupPrefix}${hostScope}${this.crypto.digestHex(value, 'md5')}`
+  }
+
+  private jsLibRemoteCacheKey(remoteUrl: string): string {
+    const sharedCache = Reflect.get(this.cache, sourceScriptCacheLockTarget)
+    const hostScope = typeof sharedCache === 'object' && sharedCache !== null ? '' : `${this.jsLibSessionId}:`
+    return `jsLib:${hostScope}${this.crypto.digestHex(remoteUrl, 'md5')}`
   }
 
   private async applyReplacement(value: unknown, rule: CompiledRule, state: EvaluationState, content: unknown): Promise<unknown> {
@@ -3900,7 +3921,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     let ownsJsLibStateLock = false
     try {
       const libraries = await this.loadSourceLibraries(source, runSignal, context?.workflowStage ?? this.workflowStageForJavaScript(stage), context?.requestObserver)
-      const jsLibStateKey = libraries.length > 0 ? `jsLibState:${this.jsLibSessionId}:${sourceDefinitionFingerprint(source)}` : undefined
+      const jsLibText = typeof source.jsLib === 'string' ? source.jsLib : ''
+      const hasJsLib = jsLibText.trim().length > 0
+      const jsLibStateKey = hasJsLib ? this.jsLibStateGroupKey(jsLibText) : undefined
+      const jsLibSourceKey = hasJsLib
+        ? `${String(source.bookSourceType ?? 0)}:${this.crypto.digestHex(source.bookSourceUrl, 'md5')}`
+        : undefined
+      const legacyJsLibStateKey = hasJsLib
+        ? `jsLibState:${this.jsLibSessionId}:${sourceDefinitionFingerprint(source)}`
+        : undefined
       if (jsLibStateKey !== undefined && !this.activeJsLibOwners.has(jsLibOwner)) {
         this.activeJsLibOwners.add(jsLibOwner)
         ownsJsLibStateLock = true
@@ -3914,10 +3943,20 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       }
       const jsLibClearGeneration = jsLibStateKey === undefined ? undefined : this.jsLibClearGenerations.get(jsLibStateKey) ?? 0
       if (jsLibStateKey !== undefined) {
-        const cachedState = decodeSourceCacheValue(this.encoding, await this.cache.get(jsLibStateKey, runSignal))
-        const persisted = typeof cachedState === 'object' && cachedState !== null && !Array.isArray(cachedState) ? cachedState as Record<string, unknown> : {}
+        const cachedGroup = decodeSourceCacheValue(this.encoding, await this.cache.get(jsLibStateKey, runSignal))
+        const group = typeof cachedGroup === 'object' && cachedGroup !== null && !Array.isArray(cachedGroup)
+          ? cachedGroup as Record<string, unknown>
+          : {}
+        const cachedState = jsLibSourceKey === undefined ? undefined : group[jsLibSourceKey]
+        let persisted = typeof cachedState === 'object' && cachedState !== null && !Array.isArray(cachedState)
+          ? cachedState as Record<string, unknown>
+          : undefined
+        if (persisted === undefined && legacyJsLibStateKey !== undefined) {
+          const legacy = decodeSourceCacheValue(this.encoding, await this.cache.get(legacyJsLibStateKey, runSignal))
+          if (typeof legacy === 'object' && legacy !== null && !Array.isArray(legacy)) persisted = legacy as Record<string, unknown>
+        }
         const explicit = context?.globalState ?? {}
-        bindings = { ...bindings, __legadoWorkflowGlobalState: { ...persisted, ...explicit } }
+        bindings = { ...bindings, __legadoWorkflowGlobalState: { ...(persisted ?? {}), ...explicit } }
       }
       const executable = `${prelude}\n${libraries.join('\n')}\n${normalizeJavaScriptExpression(code)}`
       const initialCaptureVariables: Record<string, string | undefined> = {}
@@ -3990,7 +4029,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
               // Functions and host objects are intentionally excluded from jsLib state.
             }
           }
-          if ((this.jsLibClearGenerations.get(jsLibStateKey) ?? 0) === jsLibClearGeneration) await this.cache.put(jsLibStateKey, `${sourceCacheJsonPrefix}${JSON.stringify(state)}`, 0, runSignal)
+          if ((this.jsLibClearGenerations.get(jsLibStateKey) ?? 0) === jsLibClearGeneration && jsLibSourceKey !== undefined) {
+            const cachedGroup = decodeSourceCacheValue(this.encoding, await this.cache.get(jsLibStateKey, runSignal))
+            const group = typeof cachedGroup === 'object' && cachedGroup !== null && !Array.isArray(cachedGroup)
+              ? { ...(cachedGroup as Record<string, unknown>) }
+              : {}
+            group[jsLibSourceKey] = state
+            await this.cache.put(jsLibStateKey, `${sourceCacheJsonPrefix}${JSON.stringify(group)}`, 0, runSignal)
+            if (legacyJsLibStateKey !== undefined) await this.cache.delete(legacyJsLibStateKey, runSignal)
+          }
         }
         if (context?.captureGlobals !== true && context?.captureBindings === undefined) {
           value = wrapper.__legadoWorkflowValue
@@ -4049,7 +4096,6 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (remoteUrls === undefined) return [value]
     const scripts: string[] = []
-    const fingerprint = sourceDefinitionFingerprint(source)
     for (const remoteUrl of remoteUrls) {
       let url: URL
       try {
@@ -4058,7 +4104,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         continue
       }
       if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
-      const cacheKey = `jsLib:${fingerprint}:${url.toString()}`
+      const cacheKey = this.jsLibRemoteCacheKey(remoteUrl)
       let script = await this.cache.get(cacheKey, signal)
       if (script === undefined) {
         if (this.requestBridge === undefined) throw new SourceRuleError('capability-missing', '加载 jsLib 需要网络宿主')
@@ -4075,8 +4121,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private async clearSourceLibraries(source: NormalizedSource, signal: AbortSignal): Promise<void> {
     const value = source.jsLib
     if (typeof value !== 'string' || value.trim().length === 0) return
-    const fingerprint = sourceDefinitionFingerprint(source)
-    const stateKey = `jsLibState:${this.jsLibSessionId}:${fingerprint}`
+    const stateKey = this.jsLibStateGroupKey(value)
     this.jsLibClearGenerations.set(stateKey, (this.jsLibClearGenerations.get(stateKey) ?? 0) + 1)
     await this.cache.delete(stateKey, signal)
     let remoteUrls: string[] | undefined
@@ -4097,7 +4142,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         continue
       }
       if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
-      await this.cache.delete(`jsLib:${fingerprint}:${url.toString()}`, signal)
+      await this.cache.delete(this.jsLibRemoteCacheKey(remoteUrl), signal)
     }
   }
 

@@ -206,13 +206,22 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
 
 /** 普通与字节 CacheManager 键按宿主共享；内存/文件缓存仍留在书源会话内并随源快照保存。 */
 function withSharedCache(local: SourceScriptCache, shared: SourceScriptCache): SourceScriptCache {
+  const sharedOnly = (key: string): boolean => key.startsWith('jsLibStateGroup:') || key.startsWith('jsLib:')
   const cache: SourceScriptCache = {
-    get: async (key, signal) => (await shared.get(key, signal)) ?? await local.get(key, signal),
+    get: async (key, signal) => sharedOnly(key) ? await shared.get(key, signal) : (await shared.get(key, signal)) ?? await local.get(key, signal),
     put: async (key, value, saveTime, signal) => {
+      if (sharedOnly(key)) {
+        await shared.put(key, value, saveTime, signal)
+        return
+      }
       await local.put(key, value, saveTime, signal)
       await shared.put(key, value, saveTime, signal)
     },
     delete: async (key, signal) => {
+      if (sharedOnly(key)) {
+        await shared.delete(key, signal)
+        return
+      }
       await local.delete(key, signal)
       await shared.delete(key, signal)
     },
@@ -222,6 +231,7 @@ function withSharedCache(local: SourceScriptCache, shared: SourceScriptCache): S
     getFile: (key) => local.getFile(key),
     putFile: (key, value, saveTime, signal) => local.putFile(key, value, saveTime, signal),
   }
+  Object.defineProperty(cache, Symbol.for('legado.source-script-cache-lock-target'), { value: shared })
   if (local.getByteArray !== undefined || shared.getByteArray !== undefined) {
     cache.getByteArray = async (key, signal) => (await shared.getByteArray?.(key, signal)) ?? await local.getByteArray?.(key, signal)
   }

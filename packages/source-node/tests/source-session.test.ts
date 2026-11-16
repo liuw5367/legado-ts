@@ -124,6 +124,63 @@ test('Node 会话快照仅恢复可序列化 jsLib 状态，闭包函数不会�
   restored.close()
 })
 
+test('共享宿主缓存中的同库来源在 refreshJSLib 后一起重置全局状态并保留普通变量和缓存', async () => {
+  const sharedCache = new MemorySourceScriptCache()
+  const library = 'function nextCount(value) { return (value || 0) + 1; }'
+  const first = createNodeSourceSession({ ...baseSource, bookSourceUrl: 'https://first.invalid', jsLib: library } as NormalizedSource, { sharedCache })
+  const second = createNodeSourceSession({ ...baseSource, bookSourceUrl: 'https://second.invalid', jsLib: library } as NormalizedSource, { sharedCache })
+  const rule = '@js:globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter); globalThis.fixtureP5SourceValue = Number(java.get("fixtureVariable") || 0) + 1; java.put("fixtureVariable", String(globalThis.fixtureP5SourceValue)); globalThis.fixtureP5CacheValue = Number(cache.get("fixtureCache") || 0) + 1; cache.put("fixtureCache", String(globalThis.fixtureP5CacheValue)); JSON.stringify({counter:globalThis.fixtureCounter,sourceValue:globalThis.fixtureP5SourceValue,cacheValue:globalThis.fixtureP5CacheValue})'
+  const evaluate = (session: ReturnType<typeof createNodeSourceSession>, currentSource: NormalizedSource, currentRule = rule): Promise<WorkflowRuleOutput> => session.run((ports) => ports.rules.evaluate({ source: currentSource, stage: 'search', field: 'jsLibPeerRefresh', rule: currentRule, content: '' }))
+  const value = async (session: ReturnType<typeof createNodeSourceSession>, currentSource: NormalizedSource): Promise<unknown> => {
+    const output = await evaluate(session, currentSource)
+    assert.equal(output.status, 'success', JSON.stringify(output))
+    return JSON.parse(String(output.value))
+  }
+  const firstSource = first.source
+  const secondSource = second.source
+
+  try {
+    const initial = await Promise.all([value(first, firstSource), value(second, secondSource)]) as Array<{ counter: number; sourceValue: number; cacheValue: number }>
+    assert.deepEqual(initial.map((entry) => [entry.counter, entry.sourceValue]).sort(), [[1, 1], [1, 1]])
+    assert.deepEqual(initial.map((entry) => entry.cacheValue).sort(), [1, 2])
+    assert.equal((await evaluate(first, firstSource, '@js:source.refreshJSLib(); "refreshed"')).value, 'refreshed')
+    assert.deepEqual(await value(first, firstSource), { counter: 1, sourceValue: 2, cacheValue: 3 })
+    assert.deepEqual(await value(second, secondSource), { counter: 1, sourceValue: 2, cacheValue: 4 })
+  } finally {
+    first.close()
+    second.close()
+  }
+})
+
+test('共享宿主中的 refreshJSLib 清除同库的远程 jsLib 响应缓存', async () => {
+  const sharedCache = new MemorySourceScriptCache()
+  const libraryUrl = 'https://fixture.invalid/shared-library.js'
+  const sourceDefinition = { ...baseSource, jsLib: JSON.stringify({ helper: libraryUrl }) } as NormalizedSource
+  let downloadCount = 0
+  const network: NetworkHost = {
+    request: async (plan) => {
+      downloadCount += 1
+      const library = `function fixtureVersion() { return "version-${downloadCount}"; }`
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(library), redirected: false }
+    },
+  }
+  const first = createNodeSourceSession({ ...sourceDefinition, bookSourceUrl: 'https://first.invalid' } as NormalizedSource, { sharedCache, network })
+  const second = createNodeSourceSession({ ...sourceDefinition, bookSourceUrl: 'https://second.invalid' } as NormalizedSource, { sharedCache, network })
+  const evaluate = (session: ReturnType<typeof createNodeSourceSession>, rule: string): Promise<WorkflowRuleOutput> => session.run((ports) => ports.rules.evaluate({ source: session.source, stage: 'search', field: 'jsLibRefresh', rule, content: '' }))
+
+  try {
+    assert.equal((await evaluate(first, '@js:fixtureVersion()')).value, 'version-1')
+    assert.equal((await evaluate(second, '@js:fixtureVersion()')).value, 'version-1')
+    assert.equal(downloadCount, 1, '同一 URL 的远程 jsLib 响应由共享宿主缓存复用')
+    assert.equal((await evaluate(first, '@js:source.refreshJSLib(); "refreshed"')).value, 'refreshed')
+    assert.equal((await evaluate(second, '@js:fixtureVersion()')).value, 'version-2')
+    assert.equal(downloadCount, 2, '刷新移除同库引用的远程响应，peer 来源重新下载')
+  } finally {
+    first.close()
+    second.close()
+  }
+})
+
 test('Node 会话拒绝把带 sourceKey 的运行时快照恢复到另一书源', async () => {
   const first = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource)
   await first.run((ports) => ports.rules.evaluate({ source: first.source, stage: 'search', field: 'snapshot', rule: '@js:source.put("key", "source-a"); cache.put("saved", "a"); "ok"', content: '' }))

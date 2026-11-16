@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-16 P106：对齐同库 jsLib 的跨来源刷新
+
+Android `SharedJsScope` 按原始 jsLib 声明的 MD5 共享库作用域；刷新任一来源时，会清除所有使用同一声明的来源级全局状态，并移除对应远程 jsLib URL 缓存。TS 现在按库摘要分组可序列化的来源状态，在同一宿主共享缓存范围内串行读改写；`refreshJSLib()` 清除同库 peer 状态和远程库响应缓存，同时保留各源 Java 变量及普通 CacheManager 缓存。未配置共享缓存的独立 Node session 仍各自隔离。
+
+扩展 `rule.scriptLibrary.batch-peer-refresh`，覆盖同库来源、不同库来源、刷新前后状态、Java 来源变量和 CacheManager 值；修复前 peer 全局计数为 JVM `1`、TS `2`，修复后脚本库 family **4 项（3 项一致、1 项既有允许差异）**。reader-web 的真实 `runSearchBatch` 搜索入口也验证 peer 全局重置、来源变量与普通缓存保持原值。全量 JVM/TS 矩阵 **1049 项（1048 一致、1 项允许差异、0 different/unsupported/runner failure）**，流程 **89/89**（`run-1Nb4WM`）；根测试 **720/720**、source-node build、reader-web typecheck 通过。
+
+唯一剩余允许差异是 `rule.scriptLibrary.closure-across-calls`：QuickJS 的闭包跨调用生命周期仍不等同 Rhino。当前证据来自固定 Kotlin/JVM/Rhino 与 TS/QuickJS 参考执行及 reader-web server runtime，不是 Android app/设备 golden。
+
 ## 2026-11-16 P105：对齐同宿主内跨书源 CacheManager 普通与字节缓存
 
 Android `CacheManager` 的普通与 ByteArray 缓存按原始 key 跨书源可见。`NodeSourceSessionOptions.sharedCache` 现把这两类键优先路由到宿主共享缓存；Node session 未配置共享缓存时仍保持原有本地 session/snapshot 行为。reader-web 按 repository 实例和 userId 保存共享层，source variable 仍按书源隔离，不会在用户间复用缓存。
@@ -587,7 +595,7 @@ P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、�
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现（P11） | Node 日期格式补 D/w/W/F/k/K/z/G，按 locale weekInfo 处理周边界，支持引号转义、非法 token 守卫和可注入 locale/timeZone；固定 UTC/Asia/Shanghai 回归通过；未知格式返回空结果 | SimpleDateFormat 全量 token、Android locale/时区规则和繁简词库版本仍待 Android golden；空结果是受控差异，不等同 Android 异常文本 | D3 `rule.scriptLibrary.batch-yck-format-date` 验证所选书源的 UTC 日期脚本；通用日期格式与词库仍为 TS 证据。 |
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现（P11） | 差异登记 D37；getWebViewUA 已有默认字符串；`NodeSourceSessionOptions.platformOptions` 支持装配稳定 deviceSeed、阅读和主题配置 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 | 宿主替代值保留，物理值需设备 |
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 | 仅 TS 宽松格式证据，未确认语法单列 |
-| D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；同一 session/source/jsLib 的并发执行按状态键串行提交，清理代次阻止外层旧快照覆盖嵌套刷新后的新状态；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行，函数/闭包状态仍以重新加载和可序列化状态模拟 | D3 `rule.scriptLibrary.batch-*` 对照原始日期函数、来源级全局累加和刷新。相同库的跨源刷新差异见 D39。。N5 确认同源闭包的词法计数跨调用存在差异，精确登记于 `rule.scriptLibrary.closure-across-calls`。 |
+| D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20/P106，受限会话状态） | 按原始 jsLib 声明 MD5 分组；来源级全局状态按来源类型与 URL 摘要区分。共享宿主缓存范围内，同库来源的 `refreshJSLib` 会删除全部 peer 状态和远程 URL 缓存，普通 Java 来源变量及 CacheManager 值保持不变；独立 Node session 未配置共享缓存时仍隔离。并发读改写按库状态键串行；跨操作和快照只恢复可序列化值 | QuickJS 闭包跨调用、函数/宿主对象身份、取消后的 handle 生命周期和真实 Android VM golden 仍未验证；整源 JS 仍按 TS executor 生命周期重建作用域 | `rule.scriptLibrary.batch-peer-refresh` 双端一致；全量矩阵 1049 项中 1048 一致、1 项允许差异。唯一剩余差异 `rule.scriptLibrary.closure-across-calls` 保留其精确反例。 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 | H5 的 `flow.yiove.wensang.discovery-empty-page` 对照实际规则下的顺序、页码和空页终止。应用游标隔离已有 TS 证据，跨实例需宿主 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P38 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 638/638，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增发现分类 URL 和 ExploreKind 默认类型回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 | 诊断有 TS 证据，按案例明确能力缺失 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 | URL getter 部分已双端；Android 15 查询串相对地址见 `flow.synthetic.android15-query.*` |

@@ -1846,12 +1846,12 @@ test('jsLib 支持行内库、远程缓存并按 Android 语义把映射值转�
   const mixedSource = { ...remoteSource, jsLib: JSON.stringify({ helper: 'https://fixture.invalid/lib.js', version: 1 }) } as NormalizedSource
   const mixed = await remote.evaluate({ source: mixedSource, stage: 'search', field: 'script', rule: '@js:remoteHelper()', content: '' })
   assert.equal(mixed.value, 'remote')
-  assert.equal(calls.length, 2, '数字映射值按 Android Gson 规则转成字符串，其他 URL 仍然加载')
+  assert.equal(calls.length, 1, '同一远程 URL 按 Android 的 URL 摘要缓存跨 jsLib 定义复用')
 
   const refreshed = await remote.evaluate({ source: remoteSource, stage: 'search', field: 'script', rule: `@js:cache.put('keep', 'value'); source.refreshJSLib(); cache.get('keep')`, content: '' })
   assert.equal(refreshed.value, 'value', 'refreshJSLib 不应清空普通缓存')
   assert.equal((await remote.evaluate({ source: remoteSource, stage: 'search', field: 'script', rule: '@js:remoteHelper()', content: '' })).value, 'remote')
-  assert.equal(calls.length, 3, 'refreshJSLib 后远程 jsLib 应重新请求')
+  assert.equal(calls.length, 2, 'refreshJSLib 后远程 jsLib 应重新请求')
 })
 
 test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', async () => {

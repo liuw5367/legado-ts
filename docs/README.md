@@ -73,6 +73,8 @@
 
 P105 已将 Android 普通与 ByteArray CacheManager 的跨书源 raw key 可见性用于同进程、同用户的 reader-web shared cache；源变量及跨用户缓存仍隔离。该共享层是进程内状态，进程重启和多进程持久化仍由应用宿主负责，验证状态见[兼容性状态总览](compatibility/status.md)和[已知差异](compatibility/known-divergences.md)。
 
+P106 已对齐 Android `refreshJSLib()` 的同库 peer 清理：刷新会重置同一 jsLib 声明的来源级全局状态和远程库响应缓存，同时保留 Java 来源变量与普通 CacheManager 值。全量双端矩阵为 1049 项，其中 1048 项一致、1 项允许差异；剩余项是 QuickJS 闭包跨调用。详情见[兼容性状态总览](compatibility/status.md)和[已知差异](compatibility/known-divergences.md)。
+
 基础双端验证按方法和重载生成场景证据。固定书源语料保留原文、摘要及全部来源位置，脚本片段使用固定上游 Rhino 与离线夹具。复现命令、覆盖分母和观察项说明见[双端测试包](../packages/compatibility-tests/README.md)。
 
 - **源码事实**：可以从当前源码或已有测试核验的行为。

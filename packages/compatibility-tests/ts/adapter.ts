@@ -209,6 +209,18 @@ export async function execute(item: CaseInput): Promise<unknown> {
         await executeLibrary(first, 'source.refreshJSLib(); JSON.stringify(null)')
         return [...beforeRefresh, await executeLibrary(first)]
       }
+      if (kind === 'peer-refresh') {
+        const differentLibrary = { ...first, bookSourceUrl: 'https://third.fixture.invalid', jsLib: `${str('library')}\n// distinct library` }
+        const beforeRefresh = [
+          await executeLibrary(first),
+          await executeLibrary(first),
+          await executeLibrary(second),
+          await executeLibrary(differentLibrary),
+          await executeLibrary(differentLibrary),
+        ]
+        await executeLibrary(first, 'source.refreshJSLib(); JSON.stringify(null)')
+        return [...beforeRefresh, await executeLibrary(first), await executeLibrary(second), await executeLibrary(differentLibrary)]
+      }
       if (kind !== 'scope' && kind !== 'peer-refresh') throw new UnsupportedOperation('未知 jsLib 案例')
       const beforeRefresh = [await executeLibrary(first), await executeLibrary(first), await executeLibrary(second)]
       await executeLibrary(first, 'source.refreshJSLib(); JSON.stringify(null)')
