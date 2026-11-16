@@ -583,7 +583,8 @@
       "sourceVariables": "object",
       "book": "object",
       "chapter": "object",
-      "ruleData": "object"
+      "ruleData": "object",
+      "exposeChapter": "boolean"
     }
   },
   "rule.bridgeEvalJS": {

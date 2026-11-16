@@ -1992,6 +1992,9 @@
               },
               "ruleData": {
                 "type": "object"
+              },
+              "exposeChapter": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

@@ -126,6 +126,47 @@
     }
   },
   {
+    "id": "rule.bridgeVariables.internal-chapter-scope-hidden-binding",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeVariables",
+    "input": {
+      "code": "var globalChapter=typeof chapter; var title=java.get('title'); java.put('writeTarget','chapter-updated'); return JSON.stringify({globalChapter:globalChapter,title:title,chapterValue:java.get('writeTarget'),bookValue:book.getVariable('writeTarget')});",
+      "sourceValues": {},
+      "sourceVariables": {},
+      "book": {
+        "variables": {
+          "title": "book-stored-title",
+          "writeTarget": "book-before"
+        }
+      },
+      "chapter": {
+        "title": "Android Chapter",
+        "variables": {
+          "writeTarget": "chapter-before"
+        }
+      },
+      "exposeChapter": false
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.put/get uses internal chapter context when JS chapter binding is hidden"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "globalChapter": "undefined",
+        "title": "Android Chapter",
+        "chapterValue": "chapter-updated",
+        "bookValue": "book-before"
+      }
+    }
+  },
+  {
     "id": "rule.bridgeVariables.scope-priority-and-binding-name-collisions",
     "family": "rule-bridge",
     "operation": "rule.bridgeVariables",

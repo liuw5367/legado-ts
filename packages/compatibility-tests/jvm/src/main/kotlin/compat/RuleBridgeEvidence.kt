@@ -280,7 +280,9 @@ internal fun analyzeRuleVariables(input: JsonObject): Any {
         ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
         ScriptableObject.putProperty(currentScope, "source", Context.javaToJS(source, currentScope))
         ScriptableObject.putProperty(currentScope, "book", Context.javaToJS(probe.book, currentScope))
-        ScriptableObject.putProperty(currentScope, "chapter", Context.javaToJS(probe.chapter, currentScope))
+        if (input.get("exposeChapter")?.asBoolean != false) {
+            ScriptableObject.putProperty(currentScope, "chapter", Context.javaToJS(probe.chapter, currentScope))
+        }
         val script = "(function(){\n${input.get("code").asString}\n})()"
         val result = context.evaluateString(currentScope, script, "AnalyzeRule.put/get", 1, null)
         JsonParser.parseString(Context.toString(result))

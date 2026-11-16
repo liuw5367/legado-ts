@@ -2730,7 +2730,8 @@
       ],
       "caseIds": [
         "rule.bridgeVariables.scope-priority-and-binding-name-collisions",
-        "rule.bridgeVariables.source-store-fallback"
+        "rule.bridgeVariables.source-store-fallback",
+        "rule.bridgeVariables.internal-chapter-scope-hidden-binding"
       ],
       "manifestMembers": [
         "analyze-rule-overloads::012-put",

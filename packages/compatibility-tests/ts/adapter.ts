@@ -13,6 +13,7 @@ import { executeDateBridge } from './date-bridge.ts'
 import { replaceBalancedInnerRules, splitCodeBalanced, splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
+import { internalChapterScopeBinding } from '../../source-core/src/workflows/types.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
 import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
 
@@ -281,11 +282,13 @@ export async function execute(item: CaseInput): Promise<unknown> {
           putValue: (_source, key, value) => { sourceValues.set(key, value); return value },
         },
       })
-      const value = await script(scopedHost, str('code'), '', {
+      const bindings: Record<string, unknown> = {
         book: entity(i.book),
-        chapter: entity(i.chapter),
         ruleData: entity(i.ruleData),
-      })
+      }
+      if (i.exposeChapter !== false) bindings.chapter = entity(i.chapter)
+      else if (i.chapter !== undefined) bindings[internalChapterScopeBinding] = entity(i.chapter)
+      const value = await script(scopedHost, str('code'), '', bindings)
       return JSON.parse(String(value))
     }
     case 'rule.bridgeEvalJS':
