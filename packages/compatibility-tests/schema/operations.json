@@ -481,7 +481,8 @@
       "responses": "object",
       "requestLimit": "integer",
       "chapterIndex": "integer",
-      "searchBookEvidence": "boolean"
+      "searchBookEvidence": "boolean",
+      "initialBookType": "integer"
     }
   },
   "flow.discover": {

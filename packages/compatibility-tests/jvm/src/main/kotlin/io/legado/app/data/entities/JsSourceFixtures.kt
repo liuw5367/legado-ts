@@ -1,11 +1,17 @@
 package io.legado.app.data.entities
 
+import io.legado.app.constant.BookSourceType
 import io.legado.app.constant.BookType
 
 // JVM 替代实体只保留本组 Gson 输入和实际规则脚本所用字段，排除 Room 和 Parcelable。
 data class ContentRule(val replaceRegex: String? = null, val content: String = "")
 
-data class BookSource(val bookSourceUrl: String, val bookSourceName: String, val customOrder: Int = 0) {
+data class BookSource(
+    val bookSourceUrl: String,
+    val bookSourceName: String,
+    val customOrder: Int = 0,
+    val bookSourceType: Int = BookSourceType.default,
+) {
     var batchContentRule: ContentRule = ContentRule()
     fun getContentRule(): ContentRule = batchContentRule
 }

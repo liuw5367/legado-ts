@@ -2,11 +2,12 @@ package compat
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import io.legado.app.constant.BookType
-import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.book.addType
+import io.legado.app.help.book.removeAllBookType
+import io.legado.app.help.source.getBookType
 import io.legado.app.model.jsSource.JsSourceMarshaller
 import org.htmlunit.corejs.javascript.BaseFunction
 import org.htmlunit.corejs.javascript.Context
@@ -97,7 +98,11 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
     } ?: return output
     delivered("discover", found)
     val book = execute("detail") {
-        val selectedBook = first.toBook().apply { type = BookType.text }
+        val selectedBook = first.toBook().apply {
+            type = input.get("initialBookType")?.asInt ?: type
+            removeAllBookType()
+            addType(source.getBookType())
+        }
         JsSourceMarshaller.mergeBookInfo(selectedBook, call("getBookInfo", mapOf("book" to selectedBook), optional = true), source, false)
         if (selectedBook.tocUrl.isBlank()) selectedBook.tocUrl = selectedBook.bookUrl
         selectedBook
@@ -105,7 +110,8 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
     fun variables() = book.variable?.let { JsonParser.parseString(it) }
     stage("detail", "success", mapOf("name" to book.name, "bookUrl" to book.bookUrl, "tocUrl" to book.tocUrl,
         "type" to book.type, "intro" to book.intro, "variable" to variables()))
-    book.type = (book.type and BookType.allBookType.inv()) or BookType.text
+    book.removeAllBookType()
+    book.addType(source.getBookType())
     val chapters = execute("toc") { JsSourceMarshaller.parseChapters(call("getChapters", mapOf("book" to book)), book, source) }
         ?: return output
     if (chapters.isEmpty()) {

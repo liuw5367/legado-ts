@@ -61,7 +61,10 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
       const found = await discoverBooks(ports, { source, url: '/category' })
       delivered('discover', found)
       if (!found.value) return output
-      const detail = await loadBookDetails(ports, { source, candidates: [first], canReName: false })
+      // 模拟已存在书籍进入详情刷新；这些状态位不可能由 SearchBook marshaller 直接产生。
+      const initialBookType = Number.isSafeInteger(input.initialBookType) ? Number(input.initialBookType) : undefined
+      const detailCandidate = initialBookType === undefined ? first : { ...first, type: initialBookType }
+      const detail = await loadBookDetails(ports, { source, candidates: [detailCandidate], canReName: false })
       const book = detail.value?.items[0]
       stage('detail', detail.status, book ? {
         name: book.name, bookUrl: book.bookUrl, tocUrl: book.tocUrl, type: book.type, intro: book.intro ?? null,

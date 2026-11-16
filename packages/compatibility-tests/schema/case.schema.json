@@ -1708,6 +1708,9 @@
               },
               "searchBookEvidence": {
                 "type": "boolean"
+              },
+              "initialBookType": {
+                "type": "integer"
               }
             },
             "additionalProperties": false
