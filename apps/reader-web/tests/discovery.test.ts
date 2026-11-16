@@ -237,6 +237,37 @@ test('static categories execute JS explore with the chosen URL and retain detail
   assert.equal(book.edition.metadata.intro, '脚本详情')
 })
 
+test('JS discovery ignores updateTime fields absent from Android SearchBook and Book', async () => {
+  const { repository, input } = await setup({ mainJs: [
+    'function explore(url, page) { return [{ name: "更新时间书", bookUrl: "/js-book", updateTime: "搜索更新时间" }]; }',
+    'function getBookInfo(book) { if (book.updateTime !== undefined) throw new Error("updateTime leaked into Android Book"); return { tocUrl: "/toc", intro: "脚本详情", updateTime: "详情更新时间" }; }',
+  ].join('\n') })
+  const page = await loadDiscoveryPage(repository, 'user-a', input)
+  assert.equal(page.items.length, 1)
+  assert.equal('updateTime' in page.items[0]!, false)
+  const book = await openDiscoveryBook(repository, 'user-a', { ...input, cursor: page.cursor, bookUrl: page.items[0]!.bookUrl })
+  assert.equal(book.edition.metadata.intro, '脚本详情')
+  assert.equal('updateTime' in book.edition.metadata, false)
+})
+
+test('declarative discovery ignores BookInfoRule.updateTime absent from Android Book', async (t) => {
+  const { repository, input } = await setup({
+    ruleExplore: { ...definition.ruleExplore, updateTime: '.time@text' },
+    ruleBookInfo: { ...definition.ruleBookInfo, updateTime: '.time@text' },
+  })
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    const pathname = new URL(String(url)).pathname
+    return new Response(pathname === '/book-1'
+      ? '<h1>目标书1</h1><span class="author">作者</span><span class="time">详情更新时间</span><a href="/toc">目录</a>'
+      : '<article><h2>目标书1</h2><span class="author">作者</span><span class="time">搜索更新时间</span><a href="/book-1">详情</a></article>')
+  })
+  const page = await loadDiscoveryPage(repository, 'user-a', input)
+  assert.equal(page.items.length, 1)
+  assert.equal('updateTime' in page.items[0]!, false)
+  const book = await openDiscoveryBook(repository, 'user-a', { ...input, cursor: page.cursor, bookUrl: page.items[0]!.bookUrl })
+  assert.equal('updateTime' in book.edition.metadata, false)
+})
+
 test('partial discovery keeps valid books and reports skipped items', async (t) => {
   const { repository, input } = await setup()
   t.mock.method(globalThis, 'fetch', async () => new Response(listHtml() + '<article><a href="/missing-name">坏项</a></article>'))

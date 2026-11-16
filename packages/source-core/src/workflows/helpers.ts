@@ -27,7 +27,6 @@ export const detailFields = [
   ['intro', 'intro'],
   ['coverUrl', 'coverUrl'],
   ['tocUrl', 'tocUrl'],
-  ['updateTime', 'updateTime'],
 ] as const
 
 export function asRecord(value: JsonValue | undefined): JsonObject | undefined {

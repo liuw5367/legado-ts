@@ -52,6 +52,7 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
             coverUrl: book.coverUrl ?? null, wordCount: book.wordCount ?? null,
             latestChapterTitle: book.lastChapter ?? null, tocUrl: book.tocUrl ?? '',
           })
+          if (input.updateTimeEvidence === true && book.updateTime !== undefined) value.updateTime = book.updateTime
           return value
         }) ?? null)
       }
@@ -66,10 +67,12 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
       const detailCandidate = initialBookType === undefined ? first : { ...first, type: initialBookType }
       const detail = await loadBookDetails(ports, { source, candidates: [detailCandidate], canReName: false })
       const book = detail.value?.items[0]
-      stage('detail', detail.status, book ? {
+      const detailEvidence: Record<string, unknown> | null = book ? {
         name: book.name, bookUrl: book.bookUrl, tocUrl: book.tocUrl, type: book.type, intro: book.intro ?? null,
         variable: variables(book.variable),
-      } : null)
+      } : null
+      if (input.updateTimeEvidence === true && book?.updateTime !== undefined) detailEvidence!.updateTime = book.updateTime
+      stage('detail', detail.status, detailEvidence)
       if (!book) return output
       const toc = await loadTableOfContents(ports, { source, book })
       const chapters = toc.value?.items

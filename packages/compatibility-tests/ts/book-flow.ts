@@ -21,15 +21,18 @@ interface ResponseFixture {
 
 export class FlowFixtureError extends Error {}
 
-function bookFields(book: BookCandidate) {
+function bookFields(book: BookCandidate, includeUpdateTimeEvidence = false) {
   const { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter } = book
-  return { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter }
+  const value: Record<string, unknown> = { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter }
+  if (includeUpdateTimeEvidence && book.updateTime !== undefined) value.updateTime = book.updateTime
+  return value
 }
 
 export async function executeBookFlow(input: Record<string, unknown>, mode: 'book' | 'toc' | 'discover' = 'book') {
   const imported = (await importSources(JSON.stringify(input.source)))[0]?.source
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
+  const includeUpdateTimeEvidence = input.updateTimeEvidence === true
   const declaredHeaders = typeof imported.header === 'string'
     ? (imported.header.trim().startsWith('{') ? JSON.parse(imported.header) as Record<string, string> : undefined)
     : imported.header
@@ -95,7 +98,7 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
       const result = await discoverBooks(ports, { source: imported, url: category.url, ...(cursor ? { cursor } : {}) })
       if (fault) throw fault
       const value = result.value
-      pages.push({ page: value?.cursor.index ?? cursor?.index ?? 1, status: result.status, items: value?.items.map(bookFields) ?? [], hasMore: value?.nextCursor !== undefined })
+      pages.push({ page: value?.cursor.index ?? cursor?.index ?? 1, status: result.status, items: value?.items.map((book) => bookFields(book, includeUpdateTimeEvidence)) ?? [], hasMore: value?.nextCursor !== undefined })
       cursor = value?.nextCursor
     } while (cursor !== undefined)
     return { pages, requests }
@@ -126,13 +129,13 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
   } else {
     const search = await searchBooks(ports, { source: imported, keyword: String(input.keyword) })
     const candidate = search.value?.items[0]
-    record(search, search.value?.items.map(bookFields) ?? null)
+    record(search, search.value?.items.map((book) => bookFields(book, includeUpdateTimeEvidence)) ?? null)
     if (!candidate) return output
 
     stage = 'detail'
     const details = await loadBookDetails(ports, { source: imported, candidates: [candidate] })
     book = details.value?.items[0]
-    record(details, book ? bookFields(book) : null, undefined, book)
+    record(details, book ? bookFields(book, includeUpdateTimeEvidence) : null, undefined, book)
     if (input.stopAfter === 'detail') return output
 
   }

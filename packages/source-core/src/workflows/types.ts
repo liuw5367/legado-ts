@@ -92,7 +92,7 @@ export interface BookCandidate extends BookIdentity {
   wordCount?: string
   /** 书源搜索或详情规则返回的最新章节标题；来源未提供时保持缺失。 */
   lastChapter?: string
-  /** 书源搜索或详情规则返回的更新时间文本；来源未提供时保持缺失。 */
+  /** 旧 TS 快照兼容字段；当前 Android 对齐的搜索/详情流程不会生成，Android Book 无此成员。 */
   updateTime?: string
   /** JavaScript 源搜索函数可直接返回目录地址。 */
   tocUrl?: string

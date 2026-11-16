@@ -470,7 +470,8 @@
       "stopAfter": "string",
       "requestHeaderNames": "strings",
       "requestDefaults": "object",
-      "exactRequestHeaders": "boolean"
+      "exactRequestHeaders": "boolean",
+      "updateTimeEvidence": "boolean"
     }
   },
   "flow.mainJs": {
@@ -482,7 +483,8 @@
       "requestLimit": "integer",
       "chapterIndex": "integer",
       "searchBookEvidence": "boolean",
-      "initialBookType": "integer"
+      "initialBookType": "integer",
+      "updateTimeEvidence": "boolean"
     }
   },
   "flow.discover": {

@@ -94,7 +94,8 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 
 | 案例组 | 来源与比较范围 |
 | --- | --- |
-| `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态 |
+| `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态；D17 案例另外验证搜索/详情的 `updateTime` 不进入 Android `SearchBook`/`Book` 或后续 JS 阶段 |
+| `flow.synthetic.book-info.update-time-ignored` | 固定声明式搜索/详情规则执行，验证 Android `BookList` 忽略 SearchRule 的 `updateTime`，`BookInfo` 忽略 BookInfoRule 的 `updateTime`，TS 结果与 Android `SearchBook`/`Book` 一致 |
 | `flow.yiove.wensang.discovery-empty-page` | 「文桑小说」原始发现分类和字段规则。比较两个有序结果、空页终态和实际请求顺序 |
 | `flow.android-explore.stale-page-*` | 固定 Android 分页状态机与 reader-web `DiscoveryStore` 对照；覆盖新页完成后旧请求迟到成功或失败，不能改写当前结果或错误 |
 | `flow.synthetic.content-fallback.*` | 合成正文响应。分别验证主规则命中、合法为空后回退、两边均空的终态 |
@@ -110,7 +111,7 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 
 `flow.discoverySelection` 的 TS 端直接调用 reader-web 的 `DiscoveryStore`；Kotlin/JVM 端在普通 JDK 中执行固定 Android `ExplorePaginationState` 摘录。它验证的是发现列表切页时的旧请求隔离，不运行 Android UI 或设备环境。
 
-响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 TS 专有的元数据投影不属于流程断言，例如当前固定上游未读取的 `updateTime`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
+响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 `rawFields` 等 TS 内部元数据默认不属于流程断言；D17 的两个固定案例会显式观察书级 `updateTime`，验证 Android `SearchBook`/`Book` 未声明该字段且 MainJs 也无法读取它。目录规则的章节更新时间仍单独映射到 `BookChapter.tag`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
 
 旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
 

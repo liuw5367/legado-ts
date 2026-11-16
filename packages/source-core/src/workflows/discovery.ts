@@ -313,7 +313,6 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     setOptionalText(candidate, 'kind', gsonString(record.kind))
     setOptionalText(candidate, 'wordCount', gsonString(record.wordCount))
     setOptionalText(candidate, 'lastChapter', gsonString(record.latestChapterTitle ?? record.lastChapter))
-    setOptionalText(candidate, 'updateTime', gsonString(record.updateTime))
     setOptionalText(candidate, 'coverUrl', gsonString(record.coverUrl), source.bookSourceUrl)
     setOptionalText(candidate, 'tocUrl', gsonString(record.tocUrl), bookUrl)
     const searchVariable = normalizeSearchVariable(record.variable)
@@ -341,7 +340,7 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
   return { status: statusFromDiagnostics(diagnostics, books.length), value, diagnostics, trace }
 }
 
-function setOptionalText(target: BookCandidate, key: 'intro' | 'kind' | 'wordCount' | 'lastChapter' | 'updateTime' | 'coverUrl' | 'tocUrl', value: unknown, baseUrl?: string): void {
+function setOptionalText(target: BookCandidate, key: 'intro' | 'kind' | 'wordCount' | 'lastChapter' | 'coverUrl' | 'tocUrl', value: unknown, baseUrl?: string): void {
   if (value === null || value === undefined) return
   const text = textValue(value)
   if (key === 'coverUrl' || key === 'tocUrl') {
@@ -525,7 +524,6 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     if (fields.kind !== undefined) candidate.kind = fields.kind
     if (fields.wordCount !== undefined) candidate.wordCount = formatWordCount(fields.wordCount)
     if (fields.lastChapter !== undefined) candidate.lastChapter = fields.lastChapter
-    if (fields.updateTime !== undefined) candidate.updateTime = fields.updateTime
     try {
       if (acceptCandidate !== undefined && !acceptCandidate(candidate)) continue
       identities.add(identityKey)
@@ -601,7 +599,6 @@ interface ExtractedFields {
   kind?: string
   wordCount?: string
   lastChapter?: string
-  updateTime?: string
   rawFields: JsonObject
   /** Android 对书名、作者和详情 URL 的规则执行失败会终止当前列表工作流。 */
   fatal?: { field: string; status: 'failed' | 'capability-missing'; message: string }
@@ -636,7 +633,6 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
       if (outputField === 'kind') extracted.kind = value
       if (outputField === 'wordCount') extracted.wordCount = value
       if (outputField === 'lastChapter') extracted.lastChapter = value
-      if (outputField === 'updateTime') extracted.updateTime = value
       updateSearchBookBinding(context?.bindings?.book, outputField, value, context?.baseUrl)
     }
   }
@@ -656,7 +652,7 @@ function updateSearchBookBinding(binding: unknown, field: string, value: string,
     if (value.length > 0) book.coverUrl = resolveCandidateUrl(value, baseUrl ?? '') ?? value
   } else if (field === 'bookUrl') {
     book.bookUrl = resolveCandidateUrl(value, baseUrl ?? '') ?? value
-  } else if (field === 'updateTime') book.updateTime = value
+  }
 }
 
 /** 分类规则在 Android 里取列表并按逗号连接，其余字段按文本拼接。 */
@@ -752,7 +748,6 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
   if (extraction.values.kind !== undefined) candidate.kind = extraction.values.kind
   if (extraction.values.wordCount !== undefined) candidate.wordCount = formatWordCount(extraction.values.wordCount)
   if (extraction.values.lastChapter !== undefined) candidate.lastChapter = extraction.values.lastChapter
-  if (extraction.values.updateTime !== undefined) candidate.updateTime = extraction.values.updateTime
   return { candidate, cancelled: false }
 }
 
@@ -823,7 +818,7 @@ function updateDetailBookBinding(book: BookCandidate, field: string, value: stri
     if (value.length > 0) book.coverUrl = resolveCandidateUrl(value, redirectUrl) ?? value
   } else if (field === 'tocUrl') {
     book.tocUrl = resolveCandidateUrl(value, baseUrl) ?? value
-  } else if (field === 'updateTime') book.updateTime = value
+  }
 }
 
 export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput): Promise<RuntimeResult<WorkflowPage<BookMetadata>>> {
@@ -885,6 +880,8 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     const name = formatBookName(extraction.values.name ?? '')
     const author = formatBookAuthor(extraction.values.author ?? '')
     const { infoPage: _infoPage, ...metadataCandidate } = candidate
+    // Android Book has no updateTime property; discard a TS-only value from an earlier candidate snapshot.
+    delete metadataCandidate.updateTime
     const metadata: BookMetadata = {
       ...metadataCandidate,
       rawFields: { ...candidate.rawFields, ...extraction.raw },
@@ -902,7 +899,6 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     if (extraction.values.kind !== undefined) metadata.kind = extraction.values.kind
     if (extraction.values.wordCount !== undefined) metadata.wordCount = extraction.values.wordCount
     if (extraction.values.lastChapter !== undefined) metadata.lastChapter = extraction.values.lastChapter
-    if (extraction.values.updateTime !== undefined) metadata.updateTime = extraction.values.updateTime
     const tocRuleValue = extraction.values.tocUrl
     const tocUrl = tocRuleValue === undefined || tocRuleValue.length === 0
       ? detailBaseUrl
@@ -965,6 +961,8 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     }
     const record = values as Record<string, unknown> | undefined
     const { infoPage: _infoPage, ...metadataCandidate } = candidate
+    // Android Book has no updateTime field; JS detail refresh also discards a TS-only value from an earlier snapshot.
+    delete metadataCandidate.updateTime
     const detailRawFields = record === undefined ? {} : jsonValue(record) as JsonObject
     // Android mergeBookInfo ignores identity fields even when a script returns
     // them; preserve the search marshaller's original bookUrl for later JS
@@ -990,12 +988,10 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     const kind = primitiveText(record?.kind)
     const wordCount = primitiveText(record?.wordCount)
     const lastChapter = primitiveText(record?.latestChapterTitle)
-    const updateTime = primitiveText(record?.updateTime)
     if (intro !== undefined) metadata.intro = intro
     if (kind !== undefined) metadata.kind = kind
     if (wordCount !== undefined) metadata.wordCount = wordCount
     if (lastChapter !== undefined) metadata.lastChapter = lastChapter
-    if (updateTime !== undefined) metadata.updateTime = updateTime
     const detailVariable = normalizeDetailVariable(record?.variable)
     if (detailVariable !== undefined) metadata.variable = detailVariable
     const coverUrl = primitiveText(record?.coverUrl)

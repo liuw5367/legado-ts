@@ -20,6 +20,8 @@ export function javascriptBookProjection(book: JavaScriptBook, source: Normalize
     type,
     bookUrl: rawBookUrl,
   }
+  // Android SearchBook/Book have no updateTime member, so Gson-unknown input must not enter the JS Book binding.
+  delete projected.updateTime
   for (const key of ['name', 'author', 'kind', 'coverUrl', 'intro', 'wordCount', 'variable'] as const) {
     const value = rawText(raw, key)
     if (value !== undefined) projected[key] = value

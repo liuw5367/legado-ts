@@ -1664,6 +1664,9 @@
               },
               "exactRequestHeaders": {
                 "type": "boolean"
+              },
+              "updateTimeEvidence": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -1711,6 +1714,9 @@
               },
               "initialBookType": {
                 "type": "integer"
+              },
+              "updateTimeEvidence": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

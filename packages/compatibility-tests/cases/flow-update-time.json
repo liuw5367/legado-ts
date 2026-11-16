@@ -1,0 +1,208 @@
+[
+  {
+    "id": "flow.synthetic.main-js.update-time-parity",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android SearchBook Gson 字段和 JsSourceMarshaller.mergeBookInfo 白名单"
+    },
+    "flowOrigin": {
+      "fixture": "Android JS search/detail updateTime whitelist"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "update-time"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-update-time.fixture",
+        "bookSourceName": "JS 更新时间白名单流程",
+        "mainJs": "function search(key,page){return [{name:'更新时间书',bookUrl:baseUrl+'/book',type:8,updateTime:'搜索更新时间'}]}\nfunction explore(url,page){return []}\nfunction getBookInfo(book){return {intro:book.updateTime===undefined?'搜索更新时间未进入 Book':'搜索更新时间进入 Book',tocUrl:book.bookUrl,updateTime:'详情更新时间'}}\nfunction getChapters(book){return [{title:book.updateTime===undefined?'详情更新时间未进入 Book':'详情更新时间进入 Book',url:baseUrl+'/chapter/1'}]}\nfunction getContent(chapter,book,nextChapterUrl){return book.updateTime===undefined?'正文阶段无更新时间字段':'正文阶段存在更新时间字段'}",
+        "bookSourceType": 0
+      },
+      "keyword": "更新时间书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-update-time.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-update-time.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "updateTimeEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "更新时间书",
+                "bookUrl": "https://js-update-time.fixture/book",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "empty",
+            "value": []
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "更新时间书",
+              "bookUrl": "https://js-update-time.fixture/book",
+              "tocUrl": "https://js-update-time.fixture/book",
+              "type": 8,
+              "intro": "搜索更新时间未进入 Book",
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "详情更新时间未进入 Book",
+                "url": "https://js-update-time.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "正文阶段无更新时间字段"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.book-info.update-time-ignored",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Android BookList/BookInfo 字段读取顺序与 SearchBook/Book 字段"
+    },
+    "flowOrigin": {
+      "fixture": "Android declarative SearchRule and BookInfoRule updateTime fields are not read into SearchBook/Book"
+    },
+    "tags": [
+      "offline",
+      "book-flow",
+      "update-time"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://update-time.fixture",
+        "bookSourceName": "声明式更新时间字段忽略流程",
+        "searchUrl": "/search?key={{key}}",
+        "ruleSearch": {
+          "bookList": "li",
+          "name": "a@text",
+          "bookUrl": "a@href",
+          "updateTime": ".time@text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "updateTime": ".time@text",
+          "tocUrl": "a.toc@href"
+        }
+      },
+      "keyword": "parity",
+      "requestLimit": 2,
+      "chapterIndex": 0,
+      "stopAfter": "detail",
+      "updateTimeEvidence": true,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://update-time.fixture/search?key=parity",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://update-time.fixture/search?key=parity",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaT48YSBocmVmPSIvYm9vay8xIj7kuablkI08L2E+PHNwYW4gY2xhc3M9InRpbWUiPuaQnOe0ouabtOaWsOaXtumXtDwvc3Bhbj48L2xpPjwvdWw+"
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://update-time.fixture/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://update-time.fixture/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuS5puWQjTwvaDE+PHNwYW4gY2xhc3M9InRpbWUiPuivpuaDheabtOaWsOaXtumXtDwvc3Bhbj48YSBjbGFzcz0idG9jIiBocmVmPSIvdG9jIj7nm67lvZU8L2E+"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "书名",
+                "bookUrl": "https://update-time.fixture/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "书名",
+              "bookUrl": "https://update-time.fixture/book/1",
+              "tocUrl": "https://update-time.fixture/toc"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://update-time.fixture/search?key=parity",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://update-time.fixture/book/1",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  }
+]

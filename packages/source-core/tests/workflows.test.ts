@@ -313,7 +313,7 @@ test('URL 字段从多值规则中取第一条地址', async () => {
   assert.equal(detailed.value?.items[0]?.tocUrl, 'https://source.test/toc/one')
 })
 
-test('搜索和详情字段按 Android 的副作用顺序执行', async () => {
+test('搜索和详情字段按 Android 的副作用顺序执行并忽略详情 updateTime', async () => {
   const calls: string[] = []
   const orderedSource = {
     ...source,
@@ -344,7 +344,8 @@ test('搜索和详情字段按 Android 的副作用顺序执行', async () => {
   calls.length = 0
   const detailed = await loadBookDetails(workflowPorts, { source: orderedSource, candidates: [searched.value!.items[0]!] })
   assert.equal(detailed.status, 'success')
-  assert.deepEqual(calls, ['detail-name', 'detail-author', 'detail-kind', 'detail-words', 'detail-last', 'detail-intro', 'detail-cover', 'detail-toc', 'detail-updated'])
+  assert.deepEqual(calls, ['detail-name', 'detail-author', 'detail-kind', 'detail-words', 'detail-last', 'detail-intro', 'detail-cover', 'detail-toc'])
+  assert.equal(detailed.value?.items[0]?.updateTime, undefined)
 })
 
 test('搜索早期过滤不会执行可选字段，也不会提前占用重复地址', async () => {
@@ -377,7 +378,7 @@ test('搜索早期过滤不会执行可选字段，也不会提前占用重复�
   assert.equal(result.value?.items[0]?.wordCount, '100字')
 })
 
-test('搜索和详情工作流保留最新章节与更新时间字段', async () => {
+test('搜索和详情工作流保留最新章节并忽略 Android Book 不支持的 updateTime', async () => {
   const calls: string[] = []
   const latestSource = {
     ...source,
@@ -397,9 +398,11 @@ test('搜索和详情工作流保留最新章节与更新时间字段', async ()
   const searched = await searchBooks(base, { source: latestSource, keyword: '中文' })
   assert.equal(searched.value?.items[0]?.lastChapter, '列表最新章')
   assert.equal(searched.value?.items[0]?.updateTime, undefined)
-  const detailed = await loadBookDetails(base, { source: latestSource, candidates: [searched.value!.items[0]!] })
+  const candidateWithAndroidUnknownField = { ...searched.value!.items[0]!, updateTime: '旧快照残留' }
+  const detailed = await loadBookDetails(base, { source: latestSource, candidates: [candidateWithAndroidUnknownField] })
   assert.equal(detailed.value?.items[0]?.lastChapter, '详情最新章')
-  assert.equal(detailed.value?.items[0]?.updateTime, '2026-09-23')
+  assert.equal(detailed.value?.items[0]?.updateTime, undefined)
+  assert.equal(calls.includes('detail-updated-at'), false)
 })
 
 test('搜索 URL 模板支持书源地址和安全页码算术表达式', async () => {
