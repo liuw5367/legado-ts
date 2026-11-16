@@ -18,6 +18,10 @@ URL 请求脚本会把当前章节放在内部绑定 `__legadoInternalChapterSco
 
 Kotlin/JVM/Rhino 是固定 Android 契约的参考执行，不是 Android app/设备 golden。
 
+## 2026-11-16 P99：修正兼容方法清单计数
+
+完整根测试首次运行发现 `fixtures/compatibility/method-manifest.json` 声明 `memberCount=266`，而 27 个条目的 `members` 合计 268；同一断言在干净 HEAD 基线也失败。将汇总值修正为 268 后，清单结构断言和完整根测试通过（**717/717**）。这只校正测试清单的汇总元数据，不改变兼容项或运行时行为。
+
 ## 2026-11-13 P96：对齐 AnalyzeRule.put/get 的作用域优先级
 
 Android `AnalyzeRule.put(key, value)` 按 chapter → book → ruleData 的顺序写入第一个存在的实体；没有这些实体时写入 `BaseSource` 的 key/value 存储。`get(key)` 先读 `setLocal` 局部值，再处理 `bookName/title`，随后按 chapter → book → ruleData 读取非空变量，最后回退 `BaseSource` key/value 存储，未命中返回空串。此前 TS 把名为 `book`、`chapter`、`ruleData` 的 key 当成绑定对象本身，并把 source 回退接到了 source variable map，和 Android 行为不同。
