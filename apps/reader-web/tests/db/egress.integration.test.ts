@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import test from 'node:test'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +18,30 @@ import type { Chapter } from '@legado/source-core'
 const url = process.env.READER_WEB_TEST_DATABASE_URL
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value))
 const sqlParameterBytes = (values: unknown) => Array.isArray(values) ? values.reduce((total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : value instanceof Uint8Array ? value.byteLength : Buffer.byteLength(JSON.stringify(value) ?? '')), 0) : bytes(values)
+const sourceRuntimeWorkerPath = fileURLToPath(new URL('./source-runtime-worker.ts', import.meta.url))
+const readerWebRoot = fileURLToPath(new URL('../..', import.meta.url))
+
+function runSourceRuntimeWorker(input: unknown): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const worker = spawn(process.execPath, ['--import', 'tsx', sourceRuntimeWorkerPath, JSON.stringify(input)], { cwd: readerWebRoot, env: process.env })
+    let stdout = ''
+    let stderr = ''
+    worker.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk })
+    worker.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk })
+    worker.once('error', reject)
+    worker.once('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `租约 worker 退出码 ${code}`))
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout.trim()) as Record<string, unknown>)
+      } catch (error) {
+        reject(error)
+      }
+    })
+  })
+}
 
 test('摘要投影与单章目录在真实数据库中保持隔离、版本和顺序并减少返回量', { skip: !url ? '需要独立 READER_WEB_TEST_DATABASE_URL' : false }, async (t) => {
   assert.ok(url)
@@ -369,6 +394,27 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.equal(competingLeases.filter(Boolean).length, 1, '首次创建竞争只能授予一个租约')
   const winningLease = competingLeases.find((lease) => lease !== null)!
   await repo.releaseSourceRuntimeLease(userId, 'https://race.example/source', 'race-fp', winningLease.leaseToken)
+
+  const workerSourceId = 'https://worker-race.example/source'
+  const workerFingerprint = 'worker-race-fingerprint'
+  const staleWorkerToken = `stale-${randomUUID()}`
+  const staleWorkerLease = await repo.acquireSourceRuntimeLease(userId, workerSourceId, workerFingerprint, staleWorkerToken, 10_000)
+  assert.ok(staleWorkerLease)
+  const blockedWorker = await runSourceRuntimeWorker({ operation: 'acquire', userId, sourceId: workerSourceId, sourceFingerprint: workerFingerprint, leaseToken: `blocked-${randomUUID()}`, leaseMs: 10_000 })
+  assert.deepEqual(blockedWorker, { acquired: false, leaseVersion: null, savedVersion: null }, '独立进程不能获取仍有效的租约')
+  await admin`update reader.source_runtime_state set lease_until = now() - interval '1 second' where user_id = ${userId} and source_id = ${workerSourceId} and source_fingerprint = ${workerFingerprint}`
+
+  const replacementSnapshot = { cookies: 'replacement-cookie', variables: { worker: 'replacement' } }
+  const replacementWorker = await runSourceRuntimeWorker({
+    operation: 'acquire-save', userId, sourceId: workerSourceId, sourceFingerprint: workerFingerprint,
+    leaseToken: `replacement-${randomUUID()}`, leaseMs: 10_000, snapshot: replacementSnapshot,
+  })
+  assert.deepEqual(replacementWorker, { acquired: true, leaseVersion: staleWorkerLease.version, savedVersion: staleWorkerLease.version + 1 })
+  const staleSave = await repo.saveSourceRuntimeState(userId, workerSourceId, workerFingerprint, staleWorkerToken, staleWorkerLease.version, { cookies: 'stale-cookie', variables: { worker: 'stale' } })
+  assert.equal(staleSave, null, '过期 worker 不能用旧 lease token 和版本覆盖新 worker 的快照')
+  const verificationLease = await repo.acquireSourceRuntimeLease(userId, workerSourceId, workerFingerprint, `verify-${randomUUID()}`, 10_000)
+  assert.deepEqual(verificationLease?.snapshot, replacementSnapshot, '数据库必须保留替代 worker 提交的状态')
+  if (verificationLease !== null) await repo.releaseSourceRuntimeLease(userId, workerSourceId, workerFingerprint, verificationLease.leaseToken)
 
   const candidate = { sourceId: definitions[0]!.source_id, sourceFingerprint: 'fp-0', candidate: { sourceId: definitions[0]!.source_id, bookUrl: 'book', name: '书', rawFields: {}, traceRef: 'test' } }
   const metadata = { ...candidate.candidate, emptyFields: [], fieldErrors: {} }
