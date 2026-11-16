@@ -1,0 +1,60 @@
+[
+  {
+    "id": "flow.android-explore.stale-page-success",
+    "family": "flow",
+    "operation": "flow.discoverySelection",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ExploreShowViewModel.ExplorePaginationState.skipTo/startNextPage/isActive/complete; ExploreShowViewModel gates success before inserting results",
+      "commit": "32a87b253e7cc28273c3850de86242caac83f1fd"
+    },
+    "tags": ["offline", "discovery", "pagination", "stale-request"],
+    "flowOrigin": { "fixture": "android-explore-stale-page-success" },
+    "input": {
+      "initialPage": 1,
+      "selectedPage": 10,
+      "oldOutcome": "success",
+      "oldBook": "迟到的旧页书籍",
+      "selectedBook": "当前选中页书籍"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "selectedPage": 10,
+        "visibleBooks": ["当前选中页书籍"],
+        "staleResultVisible": false,
+        "error": ""
+      }
+    }
+  },
+  {
+    "id": "flow.android-explore.stale-page-failure",
+    "family": "flow",
+    "operation": "flow.discoverySelection",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ExploreShowViewModel.ExplorePaginationState.skipTo/startNextPage/isActive/fail; ExploreShowViewModel gates stale errors",
+      "commit": "32a87b253e7cc28273c3850de86242caac83f1fd"
+    },
+    "tags": ["offline", "discovery", "pagination", "stale-request", "error"],
+    "flowOrigin": { "fixture": "android-explore-stale-page-failure" },
+    "input": {
+      "initialPage": 1,
+      "selectedPage": 10,
+      "oldOutcome": "failure",
+      "oldBook": "迟到的旧页书籍",
+      "selectedBook": "当前选中页书籍"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "selectedPage": 10,
+        "visibleBooks": ["当前选中页书籍"],
+        "staleResultVisible": false,
+        "error": ""
+      }
+    }
+  }
+]

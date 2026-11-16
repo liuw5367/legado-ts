@@ -36,7 +36,7 @@ try {
     schemaVersion: 1,
     ...(coreBuildHash ? { coreBuildHash } : {}),
     inputHash: sha256(stable(cases)),
-    implementationHash: sha256(stable([await treeHash(root), await treeHash(join(repository, 'packages/source-core/src')), await treeHash(join(repository, 'packages/source-node/src')), sha256(await readFile(join(repository, 'pnpm-lock.yaml')))])),
+    implementationHash: sha256(stable([await treeHash(root), await treeHash(join(repository, 'packages/source-core/src')), await treeHash(join(repository, 'packages/source-node/src')), sha256(await readFile(join(repository, 'apps/reader-web/src/lib/discovery-state.ts'))), sha256(await readFile(join(repository, 'pnpm-lock.yaml')))])),
     tsCommit: git(repository, 'rev-parse', 'HEAD').trim(),
     tsDiffHash: sha256(git(repository, 'diff', 'HEAD', '--', 'packages/source-core', 'packages/source-node', 'pnpm-lock.yaml')),
     referenceCommit: lock.commit,
@@ -81,7 +81,7 @@ try {
     for (const runtime of runtimes) assertProvenance((await readJson(join(directory, `${runtime}.json`))).metadata, base)
     const comparisons = cases.map((item, index) => ({ ...compareCase(item, results.jvm[index], results.ts[index]), operation: item.operation, ...(item.input.stopAfter ? { stopAfter: item.input.stopAfter } : {}), reference: item.reference, ...(item.origin ? { origin: item.origin } : {}), ...(item.flowOrigin ? { flowOrigin: item.flowOrigin } : {}) }))
     const summary = summarize(comparisons)
-    summary.flow.byOperation = Object.fromEntries(['flow.book', 'flow.toc', 'flow.contentLifecycle', 'flow.contentBatch', 'flow.loginHeader', 'flow.discover', 'flow.mainJs'].map((operation) => {
+    summary.flow.byOperation = Object.fromEntries(['flow.book', 'flow.toc', 'flow.contentLifecycle', 'flow.contentBatch', 'flow.loginHeader', 'flow.discover', 'flow.discoverySelection', 'flow.mainJs'].map((operation) => {
       const selected = comparisons.filter((item) => item.operation === operation)
       return [operation, { total: selected.length, equal: selected.filter((item) => item.status === 'equal').length }]
     }))

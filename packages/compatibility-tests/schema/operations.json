@@ -493,6 +493,16 @@
       "requestLimit": "integer"
     }
   },
+  "flow.discoverySelection": {
+    "required": ["initialPage", "selectedPage", "oldOutcome", "oldBook", "selectedBook"],
+    "properties": {
+      "initialPage": "integer",
+      "selectedPage": "integer",
+      "oldOutcome": "string",
+      "oldBook": "string",
+      "selectedBook": "string"
+    }
+  },
   "flow.toc": {
     "required": [
       "source",

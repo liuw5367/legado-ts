@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-16 P107：补齐发现迟到结果与租约 CAS 证据
+
+固定 Android `ExploreShowViewModel.ExplorePaginationState` 的行为是：翻页选择会清除活动请求，后续请求使用新的序号；成功只在请求仍活动时写入结果，失败也只由活动请求更新错误。新增两条 Kotlin/JVM 与 TS 配对流程，覆盖旧请求在新页完成后才成功或失败：Android 侧使用锁定提交中的状态机摘录，TS 侧直接运行 reader-web `DiscoveryStore`；`flow.android-explore.stale-page-success` 和 `flow.android-explore.stale-page-failure` 均一致。
+
+reader-web 服务端另新增租约过期回归：五分钟旧发现请求仍在等待响应时，控制更新接管过期租约并保存新 InfoMap；旧请求恢复后因 lease token/version CAS 失败而返回 `source-busy`，不能覆盖新快照，后续分类值与请求 URL 都保留新筛选值。该用例通过 `MemoryReaderRepository` 覆盖真实 discovery runtime，不代表 PostgreSQL 多进程集成测试。
+
+全量 JVM/TS 矩阵 **1051 项（1050 一致、1 项既有允许差异、0 different/unsupported/runner failure）**，流程 **91/91**，报告 `run-DHswlk`；兼容机制 **35/35**、reader-web discovery **18/18**、reader-web typecheck 通过。D40 仍待 PostgreSQL/独立 worker 的租约集成证据和 Android app/设备 golden；这批测试与参考代码保存在 TS 仓库，没有修改 Android 原仓库。唯一剩余允许差异仍为 `rule.scriptLibrary.closure-across-calls`。
+
 ## 2026-11-16 P106：对齐同库 jsLib 的跨来源刷新
 
 Android `SharedJsScope` 按原始 jsLib 声明的 MD5 共享库作用域；刷新任一来源时，会清除所有使用同一声明的来源级全局状态，并移除对应远程 jsLib URL 缓存。TS 现在按库摘要分组可序列化的来源状态，在同一宿主共享缓存范围内串行读改写；`refreshJSLib()` 清除同库 peer 状态和远程库响应缓存，同时保留各源 Java 变量及普通 CacheManager 缓存。未配置共享缓存的独立 Node session 仍各自隔离。
@@ -596,7 +604,7 @@ P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、�
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现（P11） | 差异登记 D37；getWebViewUA 已有默认字符串；`NodeSourceSessionOptions.platformOptions` 支持装配稳定 deviceSeed、阅读和主题配置 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 | 宿主替代值保留，物理值需设备 |
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 | 仅 TS 宽松格式证据，未确认语法单列 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20/P106，受限会话状态） | 按原始 jsLib 声明 MD5 分组；来源级全局状态按来源类型与 URL 摘要区分。共享宿主缓存范围内，同库来源的 `refreshJSLib` 会删除全部 peer 状态和远程 URL 缓存，普通 Java 来源变量及 CacheManager 值保持不变；独立 Node session 未配置共享缓存时仍隔离。并发读改写按库状态键串行；跨操作和快照只恢复可序列化值 | QuickJS 闭包跨调用、函数/宿主对象身份、取消后的 handle 生命周期和真实 Android VM golden 仍未验证；整源 JS 仍按 TS executor 生命周期重建作用域 | `rule.scriptLibrary.batch-peer-refresh` 双端一致；全量矩阵 1049 项中 1048 一致、1 项允许差异。唯一剩余差异 `rule.scriptLibrary.closure-across-calls` 保留其精确反例。 |
-| D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 | H5 的 `flow.yiove.wensang.discovery-empty-page` 对照实际规则下的顺序、页码和空页终止。应用游标隔离已有 TS 证据，跨实例需宿主 |
+| D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18/P107） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值；`flow.android-explore.stale-page-success/failure` 配对 Android 状态机与 reader-web `DiscoveryStore`；服务端回归验证过期租约由新控制更新接管后，旧分页写回被 CAS 拒绝且后续筛选值、请求 URL 保持最新 | PostgreSQL/独立 worker 的租约集成和 Android app/设备 golden 仍需验证 | H5 的 `flow.yiove.wensang.discovery-empty-page` 对照实际规则下的顺序、页码和空页终止；`run-DHswlk` 流程 91/91。租约回归使用 `MemoryReaderRepository`。 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P38 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 638/638，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增发现分类 URL 和 ExploreKind 默认类型回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 | 诊断有 TS 证据，按案例明确能力缺失 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 | URL getter 部分已双端；Android 15 查询串相对地址见 `flow.synthetic.android15-query.*` |
 | D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09/P32） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；`listFiles()` 子项也包装为可调用 File 对象，exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；`source-rule-host.test.ts` 父子对象回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 | 仅 TS 受控 File 对象，隔离政策保留 |

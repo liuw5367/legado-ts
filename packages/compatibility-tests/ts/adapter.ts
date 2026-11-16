@@ -15,6 +15,8 @@ import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourc
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
 import { internalChapterScopeBinding } from '../../source-core/src/workflows/types.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
+import { DiscoveryStore, type DiscoveryRequest } from '../../../apps/reader-web/src/lib/discovery-state.ts'
+import type { DiscoveryCategories, DiscoveryPage, DiscoverySource } from '../../../apps/reader-web/shared/discovery.ts'
 import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
 
 interface CaseInput {
@@ -32,6 +34,65 @@ function checked(output: WorkflowRuleOutput): unknown {
   if (output.status === 'capability-missing') throw new UnsupportedOperation(output.message ?? '缺少能力')
   if (output.status !== 'success' && output.status !== 'empty') throw new ObservedError(output.status, output.message ?? output.status)
   return output.value
+}
+async function executeDiscoverySelection(input: Record<string, unknown>): Promise<unknown> {
+  const source: DiscoverySource = { sourceId: 'fixture-source', name: '分页竞态书源', fingerprint: 'fixture-fingerprint' }
+  const oldPage = Number(input.initialPage)
+  const selectedPage = Number(input.selectedPage)
+  const oldCategory = String(oldPage)
+  const selectedCategory = String(selectedPage)
+  const oldBook = String(input.oldBook)
+  const selectedBook = String(input.selectedBook)
+  let resolveOld!: (page: DiscoveryPage) => void
+  let rejectOld!: (reason: Error) => void
+  let resolveStarted!: () => void
+  const oldResponse = new Promise<DiscoveryPage>((resolve, reject) => { resolveOld = resolve; rejectOld = reject })
+  const started = new Promise<void>((resolve) => { resolveStarted = resolve })
+  const categories: DiscoveryCategories = {
+    source,
+    categories: [
+      { id: oldCategory, title: `第 ${oldPage} 页` },
+      { id: selectedCategory, title: `第 ${selectedPage} 页` },
+    ],
+  }
+  const request: DiscoveryRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
+    if (path === '/api/discovery/sources') return { sources: [source] } as T
+    if (path.startsWith('/api/discovery/categories')) return categories as T
+    if (path === '/api/discovery/page') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { categoryId?: string }
+      if (body.categoryId === oldCategory) {
+        resolveStarted()
+        return await oldResponse as T
+      }
+      return {
+        cursor: { index: selectedPage, signature: `signed-${selectedPage}` },
+        items: [{ sourceId: source.sourceId, bookUrl: `/book-${selectedBook}`, name: selectedBook }],
+        status: 'success',
+      } satisfies DiscoveryPage as T
+    }
+    throw new Error(`unexpected discovery request: ${path}`)
+  }
+  const store = new DiscoveryStore('fixture-user', request)
+  const first = store.initialize(source.sourceId, oldCategory)
+  await started
+  await store.initialize(source.sourceId, selectedCategory)
+  if (input.oldOutcome === 'success') {
+    resolveOld({
+      cursor: { index: oldPage, signature: `signed-${oldPage}` },
+      items: [{ sourceId: source.sourceId, bookUrl: `/book-${oldBook}`, name: oldBook }],
+      status: 'success',
+    })
+  } else {
+    rejectOld(new Error('late discovery request failed'))
+  }
+  await first
+  const state = store.getSnapshot()
+  return {
+    selectedPage: Number(state.categoryId),
+    visibleBooks: state.items.map(({ book }) => book.name ?? ''),
+    staleResultVisible: state.items.some(({ book }) => book.name === oldBook),
+    error: state.error,
+  }
 }
 async function script(host: SourceRuleHost, expression: string, content: unknown = '', bindings?: Record<string, unknown>): Promise<unknown> {
   // 在真正的 QuickJS/Java bridge 内捕获异常，保留原始错误；不把宿主包装状态误当 API 返回值。
@@ -55,6 +116,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
   if (item.operation === 'rule.infoMap') return executeInfoMap(item.input)
   if (item.operation === 'flow.mainJs') return executeMainJsFlow(item.input)
   if (item.operation === 'flow.discover') return executeBookFlow(item.input, 'discover')
+  if (item.operation === 'flow.discoverySelection') return executeDiscoverySelection(item.input)
   if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc' ? 'toc' : 'book')
   const i = item.input
   const str = (key: string): string => String(i[key] ?? '')

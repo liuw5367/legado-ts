@@ -66,6 +66,7 @@
         "flow.book",
         "flow.mainJs",
         "flow.discover",
+        "flow.discoverySelection",
         "flow.toc",
         "rule.bridgeString",
         "rule.bridgeContent",
@@ -1744,6 +1745,47 @@
               },
               "requestLimit": {
                 "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.discoverySelection"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "initialPage",
+              "selectedPage",
+              "oldOutcome",
+              "oldBook",
+              "selectedBook"
+            ],
+            "properties": {
+              "initialPage": {
+                "type": "integer"
+              },
+              "selectedPage": {
+                "type": "integer"
+              },
+              "oldOutcome": {
+                "type": "string"
+              },
+              "oldBook": {
+                "type": "string"
+              },
+              "selectedBook": {
+                "type": "string"
               }
             },
             "additionalProperties": false

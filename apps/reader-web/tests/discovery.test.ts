@@ -6,7 +6,7 @@ import { MemoryReaderRepository, type StoredSourceRecord } from '../server/db/re
 import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
 import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, parseDiscoveryCategories, updateDiscoveryControl } from '../server/runtime/discovery.ts'
 import { discoveryBookSchema, discoveryPageSchema } from '../shared/discovery.ts'
-import { withPersistentSourceSession } from '../server/runtime/source-session.ts'
+import { ReaderRuntimeError, withPersistentSourceSession } from '../server/runtime/source-session.ts'
 
 process.env.SOURCE_RUNTIME_STATE_KEY = 'discovery-tests-existing-runtime-state-key'
 const definition = {
@@ -286,4 +286,45 @@ test('discovery control changes without an action refresh the list and invalidat
   assert.equal(calls.length, 2)
   assert.match(calls[1]!, /filter\?value=private-token/u)
   assert.equal(JSON.stringify(refreshed.cursor).includes('private-token'), false)
+})
+
+test('expired discovery lease rejects a late page write and preserves the newer infoMap snapshot', async (t) => {
+  const { repository, source } = await setup({
+    exploreUrl: JSON.stringify([{ title: '关键词', type: 'text' }, { title: '榜单', url: '/filter?value={{infoMap["关键词"]}}' }]),
+  })
+  let now = Date.now()
+  t.mock.method(Date, 'now', () => now)
+  const urls: string[] = []
+  let resolveOldResponse!: (response: Response) => void
+  let notifyOldRequestStarted!: () => void
+  const oldRequestStarted = new Promise<void>((resolve) => { notifyOldRequestStarted = resolve })
+  const oldResponse = new Promise<Response>((resolve) => { resolveOldResponse = resolve })
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    urls.push(String(url))
+    if (urls.length === 1) {
+      notifyOldRequestStarted()
+      return oldResponse
+    }
+    return new Response(listHtml())
+  })
+
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  const control = categories.categories.find((item) => item.title === '关键词')!
+  const list = categories.categories.find((item) => item.title === '榜单')!
+  const latePage = loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  await oldRequestStarted
+
+  now += 5 * 60 * 1000 + 1
+  const changed = await updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: control.id, value: 'private-token' })
+  assert.equal(changed.categories.find((item) => item.id === control.id)?.value, 'private-token')
+  assert.equal(changed.refreshed, true)
+
+  resolveOldResponse(new Response(listHtml()))
+  await assert.rejects(latePage, (error: unknown) => error instanceof ReaderRuntimeError && error.code === 'source-busy')
+
+  const restored = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  assert.equal(restored.categories.find((item) => item.id === control.id)?.value, 'private-token')
+  await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  assert.equal(urls.length, 2)
+  assert.match(urls[1]!, /filter\?value=private-token/u)
 })

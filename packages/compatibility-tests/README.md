@@ -96,6 +96,7 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 | --- | --- |
 | `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态 |
 | `flow.yiove.wensang.discovery-empty-page` | 「文桑小说」原始发现分类和字段规则。比较两个有序结果、空页终态和实际请求顺序 |
+| `flow.android-explore.stale-page-*` | 固定 Android 分页状态机与 reader-web `DiscoveryStore` 对照；覆盖新页完成后旧请求迟到成功或失败，不能改写当前结果或错误 |
 | `flow.synthetic.content-fallback.*` | 合成正文响应。分别验证主规则命中、合法为空后回退、两边均空的终态 |
 | `flow.synthetic.content-batch.*` | 14 条合成双端流程。验证章节对象、相对/唯一/歧义 URL、纯数字拒绝、空正文、重复回存、部分写入后脚本失败、旧缓存令牌拒写、取消、`<js>`/`@js:`/裸脚本及 JS 源 `getContentBatch`；比较批次结果、保存调用和缺章单章请求 |
 | `flow.yiove.html.*` | 「言情小说阁」原始规则与合成 HTML。验证搜索顺序、相对链接、独立目录地址、正文替换、合法空搜索和空正文失败 |
@@ -106,6 +107,8 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 | `flow.yiove.toc-variable.*` 与 `flow.synthetic.book-variable.*` | 「穿越小说🎃」原始目录规则。验证初始变量、详情写入后目录读取、选章和同一 worker 中的案例隔离 |
 
 `flow.toc` 只运行目录阶段，显式输入书籍身份与初始变量。`flow.discover` 根据固定书源的分类标题选择原地址，通过真实 TS 发现入口分页。报告分列完整流程和阶段用例。请求案例通过 `requestEvidence` 比较离线传输边界的请求体 Base64 和响应最终地址。变量用例通过 `variableKeys` 比较指定键的实际阶段快照，保留未设置与空字符串的区别。
+
+`flow.discoverySelection` 的 TS 端直接调用 reader-web 的 `DiscoveryStore`；Kotlin/JVM 端在普通 JDK 中执行固定 Android `ExplorePaginationState` 摘录。它验证的是发现列表切页时的旧请求隔离，不运行 Android UI 或设备环境。
 
 响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 TS 专有的元数据投影不属于流程断言，例如当前固定上游未读取的 `updateTime`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
 

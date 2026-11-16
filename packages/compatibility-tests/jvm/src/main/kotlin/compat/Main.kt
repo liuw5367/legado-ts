@@ -70,6 +70,7 @@ private fun execute(item: JsonObject): Any? {
         "flow.contentBatch" -> executeContentBatchFlow(input)
         "flow.loginHeader" -> executeLoginHeaderFlow(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "flow.discoverySelection" -> executeDiscoverySelection(input)
         "url.options" -> {
             val raw = text("url")
             val separator = Regex("\\s*,\\s*(?=\\{)").find(raw)

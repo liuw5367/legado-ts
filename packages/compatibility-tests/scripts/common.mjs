@@ -147,6 +147,8 @@ export function validateCase(item) {
     validateContentBatchCase(item)
   } else if (item.operation === 'flow.loginHeader') {
     validateLoginHeaderCase(item)
+  } else if (item.operation === 'flow.discoverySelection') {
+    validateDiscoverySelectionCase(item)
   } else if (item.operation.startsWith('flow.')) validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
@@ -177,6 +179,15 @@ function validateLoginHeaderCase(item) {
       throw new Error(`${item.id}: 登录 Cookie 边界用例无效`)
     }
   }
+}
+function validateDiscoverySelectionCase(item) {
+  const { initialPage, selectedPage, oldOutcome, oldBook, selectedBook } = item.input
+  if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow'
+    || typeof item.flowOrigin?.fixture !== 'string' || !Number.isSafeInteger(initialPage) || initialPage <= 0
+    || !Number.isSafeInteger(selectedPage) || selectedPage <= 0 || initialPage === selectedPage
+    || !['success', 'failure'].includes(oldOutcome) || typeof oldBook !== 'string' || oldBook.length === 0
+    || typeof selectedBook !== 'string' || selectedBook.length === 0 || oldBook === selectedBook
+    || item.allowedDifferences !== undefined) throw new Error(`${item.id}: 发现迟到请求案例无效`)
 }
 function validateContentBatchCase(item) {
   const { input } = item

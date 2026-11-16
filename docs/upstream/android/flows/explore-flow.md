@@ -40,6 +40,8 @@ source-core 的 `DiscoveryInput.url` 对应这个已选分类地址；未传入�
 
 分类列表与发现结果列表是不同输出：前者回答“有哪些入口和控件”，后者回答“选定入口这一页有哪些书”。单个分类请求失败不得删掉其他分类；换分类或换页时，调用方应取消旧请求并按分类身份和页码隔离结果。分类缓存更新不能复用旧 URL 对应的结果。正文、目录和详情仍以选中书籍的身份进入各自流程。
 
+固定 Android `ExploreShowViewModel.ExplorePaginationState` 用单调请求序号跟踪活动分页请求。`skipTo(page)` 会使旧请求失效并更新 `nextPage`；`complete` 与 `fail` 仅接受当前请求。`ExploreShowViewModel` 在写入列表结果前检查 `isActive(request)`，在更新错误前检查 `fail(request)`。上游测试 `ExplorePaginationStateTest` 的 “skip invalidates old request and selected page advances” 固定了旧成功不能推进新页，测试源码来自 Android 提交 `32a87b253e7cc28273c3850de86242caac83f1fd`。TS 仓库中的配对案例分别覆盖迟到成功和迟到失败。
+
 ## 错误与验证
 
 - `exploreUrl` 为空：分类结果为空，不发起网络请求。
