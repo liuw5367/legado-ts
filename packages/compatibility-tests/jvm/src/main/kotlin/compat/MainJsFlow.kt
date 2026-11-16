@@ -2,6 +2,7 @@ package compat
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.legado.app.constant.BookSourceType
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.exception.NoStackTraceException
@@ -21,7 +22,11 @@ import java.util.Base64
 /** 纯 JVM 保留固定 Rhino 和原 marshaller，应用作用域和网络仅适配已声明的离线输入。 */
 internal fun executeMainJsFlow(input: JsonObject): Any {
     val definition = input.getAsJsonObject("source")
-    val source = BookSource(definition.get("bookSourceUrl").asString, definition.get("bookSourceName").asString)
+    val source = BookSource(
+        definition.get("bookSourceUrl").asString,
+        definition.get("bookSourceName").asString,
+        bookSourceType = definition.get("bookSourceType")?.takeUnless { it.isJsonNull }?.asInt ?: BookSourceType.default,
+    )
     val requests = mutableListOf<Map<String, String>>()
     val stages = linkedMapOf<String, Any?>()
     val output = mapOf("stages" to stages, "requests" to requests)

@@ -109,5 +109,453 @@
         "variableAfterContent": null
       }
     }
+  },
+  {
+    "id": "flow.synthetic.main-js.book-type.file-source-state-bits",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsSourceBook.getBookInfoAwait/getChapterListAwait 调用 Book.removeAllBookType + Book.addType(source.getBookType())"
+    },
+    "flowOrigin": {
+      "fixture": "Android BookType state-bit lifecycle, source type 3"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "book-type"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-book-type.fixture",
+        "bookSourceName": "BookType 文件源状态位流程",
+        "mainJs": "function search(key,page){return [{name:'状态书',bookUrl:baseUrl+'/book',type:8}]}\nfunction explore(url,page){return [{name:'发现书',bookUrl:baseUrl+'/found',type:8}]}\nfunction getBookInfo(book){if(book.type!==1944)throw new Error('detail BookType: '+book.type);return {intro:String(book.type),tocUrl:book.bookUrl,downloadUrls:[baseUrl+'/download/book']}}\nfunction getChapters(book){if(book.type!==1944)throw new Error('toc BookType: '+book.type);return [{title:String(book.type),url:baseUrl+'/chapter/1'},{title:'下一章',url:baseUrl+'/chapter/2'}]}\nfunction getContent(chapter,book,nextChapterUrl){if(book.type!==1944)throw new Error('content BookType: '+book.type);return book.type+'|'+chapter.title+'|'+nextChapterUrl}",
+        "bookSourceType": 3
+      },
+      "keyword": "状态书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-book-type.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-book-type.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "initialBookType": 2044
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "状态书",
+                "bookUrl": "https://js-book-type.fixture/book",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现书",
+                "bookUrl": "https://js-book-type.fixture/found",
+                "type": 8,
+                "variable": null
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "状态书",
+              "bookUrl": "https://js-book-type.fixture/book",
+              "tocUrl": "https://js-book-type.fixture/book",
+              "type": 1944,
+              "intro": "1944",
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "1944",
+                "url": "https://js-book-type.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "下一章",
+                "url": "https://js-book-type.fixture/chapter/2",
+                "index": 1,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "1944|1944|https://js-book-type.fixture/chapter/2"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.book-type.audio-source-state-bits",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsSourceBook.getBookInfoAwait/getChapterListAwait 调用 Book.removeAllBookType + Book.addType(source.getBookType())"
+    },
+    "flowOrigin": {
+      "fixture": "Android BookType state-bit lifecycle, source type 1"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "book-type"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-book-type.fixture",
+        "bookSourceName": "BookType 音频源状态位流程",
+        "mainJs": "function search(key,page){return [{name:'状态书',bookUrl:baseUrl+'/book',type:32}]}\nfunction explore(url,page){return [{name:'发现书',bookUrl:baseUrl+'/found',type:32}]}\nfunction getBookInfo(book){if(book.type!==1840)throw new Error('detail BookType: '+book.type);return {intro:String(book.type),tocUrl:book.bookUrl}}\nfunction getChapters(book){if(book.type!==1840)throw new Error('toc BookType: '+book.type);return [{title:String(book.type),url:baseUrl+'/chapter/1'},{title:'下一章',url:baseUrl+'/chapter/2'}]}\nfunction getContent(chapter,book,nextChapterUrl){if(book.type!==1840)throw new Error('content BookType: '+book.type);return book.type+'|'+chapter.title+'|'+nextChapterUrl}",
+        "bookSourceType": 1
+      },
+      "keyword": "状态书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-book-type.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-book-type.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "initialBookType": 2044
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "状态书",
+                "bookUrl": "https://js-book-type.fixture/book",
+                "type": 32,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现书",
+                "bookUrl": "https://js-book-type.fixture/found",
+                "type": 32,
+                "variable": null
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "状态书",
+              "bookUrl": "https://js-book-type.fixture/book",
+              "tocUrl": "https://js-book-type.fixture/book",
+              "type": 1840,
+              "intro": "1840",
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "1840",
+                "url": "https://js-book-type.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "下一章",
+                "url": "https://js-book-type.fixture/chapter/2",
+                "index": 1,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "1840|1840|https://js-book-type.fixture/chapter/2"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.book-type.image-source-state-bits",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsSourceBook.getBookInfoAwait/getChapterListAwait 调用 Book.removeAllBookType + Book.addType(source.getBookType())"
+    },
+    "flowOrigin": {
+      "fixture": "Android BookType state-bit lifecycle, source type 2"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "book-type"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-book-type.fixture",
+        "bookSourceName": "BookType 图片源状态位流程",
+        "mainJs": "function search(key,page){return [{name:'状态书',bookUrl:baseUrl+'/book',type:64}]}\nfunction explore(url,page){return [{name:'发现书',bookUrl:baseUrl+'/found',type:64}]}\nfunction getBookInfo(book){if(book.type!==1872)throw new Error('detail BookType: '+book.type);return {intro:String(book.type),tocUrl:book.bookUrl}}\nfunction getChapters(book){if(book.type!==1872)throw new Error('toc BookType: '+book.type);return [{title:String(book.type),url:baseUrl+'/chapter/1'},{title:'下一章',url:baseUrl+'/chapter/2'}]}\nfunction getContent(chapter,book,nextChapterUrl){if(book.type!==1872)throw new Error('content BookType: '+book.type);return book.type+'|'+chapter.title+'|'+nextChapterUrl}",
+        "bookSourceType": 2
+      },
+      "keyword": "状态书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-book-type.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-book-type.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "initialBookType": 2044
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "状态书",
+                "bookUrl": "https://js-book-type.fixture/book",
+                "type": 64,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现书",
+                "bookUrl": "https://js-book-type.fixture/found",
+                "type": 64,
+                "variable": null
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "状态书",
+              "bookUrl": "https://js-book-type.fixture/book",
+              "tocUrl": "https://js-book-type.fixture/book",
+              "type": 1872,
+              "intro": "1872",
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "1872",
+                "url": "https://js-book-type.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "下一章",
+                "url": "https://js-book-type.fixture/chapter/2",
+                "index": 1,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "1872|1872|https://js-book-type.fixture/chapter/2"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.book-type.video-source-state-bits",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsSourceBook.getBookInfoAwait/getChapterListAwait 调用 Book.removeAllBookType + Book.addType(source.getBookType())"
+    },
+    "flowOrigin": {
+      "fixture": "Android BookType state-bit lifecycle, source type 4"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "book-type"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js-book-type.fixture",
+        "bookSourceName": "BookType 视频源状态位流程",
+        "mainJs": "function search(key,page){return [{name:'状态书',bookUrl:baseUrl+'/book',type:4}]}\nfunction explore(url,page){return [{name:'发现书',bookUrl:baseUrl+'/found',type:4}]}\nfunction getBookInfo(book){if(book.type!==1812)throw new Error('detail BookType: '+book.type);return {intro:String(book.type),tocUrl:book.bookUrl}}\nfunction getChapters(book){if(book.type!==1812)throw new Error('toc BookType: '+book.type);return [{title:String(book.type),url:baseUrl+'/chapter/1'},{title:'下一章',url:baseUrl+'/chapter/2'}]}\nfunction getContent(chapter,book,nextChapterUrl){if(book.type!==1812)throw new Error('content BookType: '+book.type);return book.type+'|'+chapter.title+'|'+nextChapterUrl}",
+        "bookSourceType": 4
+      },
+      "keyword": "状态书",
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js-book-type.fixture/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js-book-type.fixture/unused",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "base64": "W10="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "chapterIndex": 0,
+      "initialBookType": 2044
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "状态书",
+                "bookUrl": "https://js-book-type.fixture/book",
+                "type": 4,
+                "variable": null
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现书",
+                "bookUrl": "https://js-book-type.fixture/found",
+                "type": 4,
+                "variable": null
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "状态书",
+              "bookUrl": "https://js-book-type.fixture/book",
+              "tocUrl": "https://js-book-type.fixture/book",
+              "type": 1812,
+              "intro": "1812",
+              "variable": null
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "1812",
+                "url": "https://js-book-type.fixture/chapter/1",
+                "index": 0,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "下一章",
+                "url": "https://js-book-type.fixture/chapter/2",
+                "index": 1,
+                "volume": false,
+                "vip": false,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "1812|1812|https://js-book-type.fixture/chapter/2"
+          }
+        },
+        "requests": [],
+        "variableAfterContent": null
+      }
+    }
   }
 ]
