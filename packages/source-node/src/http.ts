@@ -310,7 +310,7 @@ export class NodeNetworkHost implements NetworkHost {
     let redirects = 0
     let requestCount = 0
     let totalBytes = 0
-    let stripSensitiveHeaders = false
+    let stripAuthorizationHeaders = false
     let stripBodyHeaders = false
     try {
     while (true) {
@@ -319,10 +319,9 @@ export class NodeNetworkHost implements NetworkHost {
       const headers = new Headers(plan.headers)
       if (headers.get('user-agent') === null && this.defaultUserAgent !== undefined) headers.set('User-Agent', this.defaultUserAgent)
       if (proxyUrl !== undefined && proxyAuthorization !== undefined) headers.delete('proxy-authorization')
-      if (stripSensitiveHeaders) {
+      if (stripAuthorizationHeaders) {
         headers.delete('authorization')
         headers.delete('proxy-authorization')
-        headers.delete('cookie')
       }
       if (stripBodyHeaders) {
         headers.delete('content-type')
@@ -357,7 +356,10 @@ export class NodeNetworkHost implements NetworkHost {
         if (redirects >= plan.budget.maxRedirects) throw new Error('redirect budget exceeded')
         redirects += 1
         const nextUrl = await assertSafeUrl(new URL(location, currentUrl).toString(), this.options)
-        if (nextUrl.origin !== currentUrl.origin) stripSensitiveHeaders = true
+        if (nextUrl.origin !== currentUrl.origin) {
+          // Android OkHttp 会移除跨源 Authorization，但保留显式 Cookie；目标 URL 的 CookieJar 仍单独合并。
+          stripAuthorizationHeaders = true
+        }
         if ((response.status === 301 || response.status === 302 || response.status === 303) && currentMethod !== 'GET' && currentMethod !== 'HEAD') {
           currentMethod = 'GET'
           currentBody = undefined

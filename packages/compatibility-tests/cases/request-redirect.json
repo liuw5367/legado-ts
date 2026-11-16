@@ -107,14 +107,127 @@
       "offline",
       "edge"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/requests/1/cookie",
-        "jvm": "session=fixture",
-        "ts": null,
-        "reason": "TS 跨源重定向移除调用方显式 Cookie，保留宿主隔离策略。"
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": 200,
+        "finalPath": "/target",
+        "requests": [
+          {
+            "path": "/start",
+            "method": "POST",
+            "body": "fixture body",
+            "userAgent": "fixture-redirect",
+            "authorization": "Bearer fixture",
+            "cookie": "session=fixture",
+            "contentType": "text/plain; charset=utf-8",
+            "host": "127.0.0.1"
+          },
+          {
+            "path": "/target",
+            "method": "GET",
+            "body": "",
+            "userAgent": "fixture-redirect",
+            "authorization": null,
+            "cookie": "session=fixture",
+            "contentType": null,
+            "host": "localhost"
+          }
+        ]
       }
-    ]
+    }
+  },
+  {
+    "id": "request.redirect.cross-origin-307",
+    "family": "request-transport",
+    "operation": "request.redirect",
+    "input": {
+      "status": 307,
+      "crossOrigin": true
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 OkHttp 5.4.0 环回重定向传输"
+    },
+    "tags": [
+      "offline",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": 200,
+        "finalPath": "/target",
+        "requests": [
+          {
+            "path": "/start",
+            "method": "POST",
+            "body": "fixture body",
+            "userAgent": "fixture-redirect",
+            "authorization": "Bearer fixture",
+            "cookie": "session=fixture",
+            "contentType": "text/plain; charset=utf-8",
+            "host": "127.0.0.1"
+          },
+          {
+            "path": "/target",
+            "method": "POST",
+            "body": "fixture body",
+            "userAgent": "fixture-redirect",
+            "authorization": null,
+            "cookie": "session=fixture",
+            "contentType": "text/plain; charset=utf-8",
+            "host": "localhost"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "request.redirect.cross-origin-308",
+    "family": "request-transport",
+    "operation": "request.redirect",
+    "input": {
+      "status": 308,
+      "crossOrigin": true
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 OkHttp 5.4.0 环回重定向传输"
+    },
+    "tags": [
+      "offline",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": 200,
+        "finalPath": "/target",
+        "requests": [
+          {
+            "path": "/start",
+            "method": "POST",
+            "body": "fixture body",
+            "userAgent": "fixture-redirect",
+            "authorization": "Bearer fixture",
+            "cookie": "session=fixture",
+            "contentType": "text/plain; charset=utf-8",
+            "host": "127.0.0.1"
+          },
+          {
+            "path": "/target",
+            "method": "POST",
+            "body": "fixture body",
+            "userAgent": "fixture-redirect",
+            "authorization": null,
+            "cookie": "session=fixture",
+            "contentType": "text/plain; charset=utf-8",
+            "host": "localhost"
+          }
+        ]
+      }
+    }
   },
   {
     "id": "request.redirect.missing-location",

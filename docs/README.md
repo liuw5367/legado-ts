@@ -65,6 +65,8 @@
 
 当前兼容性计划获准使用仅绑定本机 loopback 地址的临时 HTTP 夹具验证请求行为；这项授权不包含公网目标。
 
+请求差异以固定 Android/OkHttp 参考和 Node 宿主策略分别验证。跨源重定向中的显式 Cookie 已按 OkHttp 行为由 loopback 双端案例及 reader-web 搜索入口覆盖；Node 的 SSRF 与 HTTP host policy 保持独立约束，具体状态见[兼容性状态总览](compatibility/status.md)和[已知差异](compatibility/known-divergences.md)。
+
 双端流程覆盖静态与动态 POST、HTML 正文分页、重定向详情识别、目录排序与去重、跨阶段书籍变量。脚本状态、取消和部分二进制行为已有离线证据。后续按已有差异的下游影响、缺失的 API 分支及真实规则组合，从固定语料选取案例。历史差异按分支关联同输入结果和参考出处，真实宿主证据单列。执行和证据范围见[一致性测试基线](compatibility/conformance-tests.md)。
 
 非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期；这些项目已加入共享案例和固定 Android JVM 参考端对照。登录头流程对照锁定的 Android `BaseSource`、`AnalyzeUrl` 与 `CookieStore` 源码摘录，验证同站注入、Cookie 合并、快照恢复和删除；应用级密钥存储、多实例持久化、动态登录头脚本及 Android 应用网络容器仍需单独取证。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。

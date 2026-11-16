@@ -62,6 +62,77 @@ test('reader-web 重取请求的 initUrl 会重新应用书源 URL options Heade
   ])
 })
 
+test('reader-web search follows OkHttp cross-origin redirects with explicit Cookie for 302, 307 and 308', async (t) => {
+  const cases = [
+    { status: 302, redirectedMethod: 'GET', redirectedBody: '', redirectedContentType: null },
+    { status: 307, redirectedMethod: 'POST', redirectedBody: 'fixture body', redirectedContentType: 'text/plain; charset=utf-8' },
+    { status: 308, redirectedMethod: 'POST', redirectedBody: 'fixture body', redirectedContentType: 'text/plain; charset=utf-8' },
+  ] as const
+  const observed: Array<{ url: string; method: string; body: string; authorization: string | null; cookie: string | null; contentType: string | null }> = []
+  let requestIndex = 0
+  t.mock.method(globalThis, 'fetch', async (url: URL | string, init?: RequestInit) => {
+    const current = cases[Math.floor(requestIndex / 2)]!
+    const startUrl = `https://8.8.4.20/start-${current.status}`
+    const targetUrl = `https://1.1.1.1/target-${current.status}`
+    const headers = new Headers(init?.headers)
+    observed.push({
+      url: String(url),
+      method: String(init?.method ?? 'GET'),
+      body: init?.body instanceof Uint8Array ? Buffer.from(init.body).toString('utf8') : String(init?.body ?? ''),
+      authorization: headers.get('authorization'),
+      cookie: headers.get('cookie'),
+      contentType: headers.get('content-type'),
+    })
+    requestIndex += 1
+    if (String(url) === startUrl) return new Response(null, { status: current.status, headers: { location: targetUrl } })
+    return new Response(JSON.stringify({ books: [{ name: `重定向书${current.status}`, url: `https://1.1.1.1/book-${current.status}` }] }), {
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    })
+  })
+
+  for (const current of cases) {
+    const repository = new MemoryReaderRepository(); const user = randomUUID()
+    const base = 'https://8.8.4.20'
+    const startUrl = `${base}/start-${current.status}`
+    const targetUrl = `https://1.1.1.1/target-${current.status}`
+    const options = JSON.stringify({
+      method: 'POST',
+      body: 'fixture body',
+      headers: { Authorization: 'Bearer fixture', Cookie: 'session=fixture', 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+    await importBatch(repository, user, [{
+      ...sourceDefinition(`${base}/source-${current.status}`),
+      searchUrl: `${startUrl},${options}`,
+      ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+    }])
+    const source = (await repository.listSourcesForUser(user))[0]!
+    const run = await repository.createSearch(user, { keyword: '重定向', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+    const firstObserved = observed.length
+    const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+    assert.equal(result.search.status, 'success')
+    assert.equal(result.candidates[0]?.candidate.name, `重定向书${current.status}`)
+    assert.deepEqual(observed.slice(firstObserved), [
+      {
+        url: startUrl,
+        method: 'POST',
+        body: 'fixture body',
+        authorization: 'Bearer fixture',
+        cookie: 'session=fixture',
+        contentType: 'text/plain; charset=utf-8',
+      },
+      {
+        url: targetUrl,
+        method: current.redirectedMethod,
+        body: current.redirectedBody,
+        authorization: null,
+        cookie: 'session=fixture',
+        contentType: current.redirectedContentType,
+      },
+    ])
+  }
+})
+
 test('reader-web search parses Android balanced inline JSONPath in a source response', async (t) => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.9'

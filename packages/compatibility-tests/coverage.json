@@ -2977,6 +2977,8 @@
         "request.redirect.same-origin-302",
         "request.redirect.same-origin-307",
         "request.redirect.cross-origin-302",
+        "request.redirect.cross-origin-307",
+        "request.redirect.cross-origin-308",
         "request.redirect.missing-location",
         "request.redirect.ordinary-header-variants"
       ]
