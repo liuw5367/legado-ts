@@ -863,6 +863,8 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .floating-message-close svg { width: 16px; height: 16px; }
 .floating-message-close:hover { background: rgb(255 255 255 / 8%); }
 .reader-floating-message { bottom: calc(148px + var(--safe-bottom)); }
+.reader-floating-message[data-tone="error"] { bottom: calc(164px + var(--safe-bottom)); }
+.reader-refresh-status { position: fixed; z-index: 6; top: calc(56px + var(--page-top-inset, 0px)); left: 50%; transform: translateX(-50%); padding-inline: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); pointer-events: none; white-space: nowrap; }
 .message-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
 .message-close svg { width: 16px; height: 16px; }
 .message-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
